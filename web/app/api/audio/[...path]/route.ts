@@ -4,7 +4,7 @@ import path from 'path';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
     // Get audio directory from environment variable
@@ -13,8 +13,11 @@ export async function GET(
       return path.join(projectRoot, 'data', '2_audio_output');
     })();
 
+    // Await params (Next.js 16+ requires params to be awaited)
+    const resolvedParams = await params;
+    
     // Reconstruct filename from path array
-    const filename = params.path.join('/');
+    const filename = resolvedParams.path.join('/');
     
     // Security: Prevent path traversal attacks
     if (filename.includes('..') || path.isAbsolute(filename)) {

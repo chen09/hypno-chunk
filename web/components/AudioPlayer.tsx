@@ -1,7 +1,9 @@
 import { useRef, useEffect, useState } from 'react';
 import AudioPlayer from 'react-h5-audio-player';
 import 'react-h5-audio-player/lib/styles.css';
-import { X } from 'lucide-react';
+import { X, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
+
+type PlayMode = 'normal' | 'repeat-all' | 'repeat-one' | 'shuffle';
 
 interface CustomAudioPlayerProps {
   currentTrack: { filename: string; path: string } | null;
@@ -9,12 +11,31 @@ interface CustomAudioPlayerProps {
   onPrev: () => void;
   onClose?: () => void;
   onTimeUpdate?: (currentTime: number) => void;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
+  playMode?: PlayMode;
+  onPlayModeChange?: (mode: PlayMode) => void;
+  onTrackEnded?: () => void;
 }
 
-export default function CustomAudioPlayer({ currentTrack, onNext, onPrev, onClose, onTimeUpdate }: CustomAudioPlayerProps) {
+export default function CustomAudioPlayer({ 
+  currentTrack, 
+  onNext, 
+  onPrev, 
+  onClose, 
+  onTimeUpdate, 
+  hasPrevious = false, 
+  hasNext = false,
+  playMode = 'normal',
+  onPlayModeChange,
+  onTrackEnded
+}: CustomAudioPlayerProps) {
   const playerRef = useRef<AudioPlayer>(null);
   // Use useState with a function to avoid hydration mismatch
   const [mounted, setMounted] = useState(false);
+  // Track playing state to auto-play when switching tracks
+  const [wasPlaying, setWasPlaying] = useState(false);
+  const previousTrackRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Set mounted after component mounts on client side
@@ -25,28 +46,82 @@ export default function CustomAudioPlayer({ currentTrack, onNext, onPrev, onClos
 
   console.log("Render AudioPlayer. Mounted:", mounted, "Track:", currentTrack?.filename);
 
-  // Auto-play when track changes
+  // Track playing state
   useEffect(() => {
-    if (currentTrack && playerRef.current) {
-        console.log("AudioPlayer effect triggered. Setting src:", currentTrack.path);
-        
-        // Check if the src actually changed to avoid double-loading
-        // const audioNode = playerRef.current.audio.current;
-        // react-h5-audio-player handles prop changes, but explicit check helps
-        
-        // Media Session API Setup
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: currentTrack.filename,
-                artist: 'HypnoChunk',
-                album: 'English Learning',
+    if (!playerRef.current || !currentTrack) return;
+
+    const audioElement = playerRef.current.audio?.current;
+    if (!audioElement) return;
+
+    const handlePlay = () => {
+      setWasPlaying(true);
+    };
+
+    const handlePause = () => {
+      setWasPlaying(false);
+    };
+
+    audioElement.addEventListener('play', handlePlay);
+    audioElement.addEventListener('pause', handlePause);
+
+    return () => {
+      audioElement.removeEventListener('play', handlePlay);
+      audioElement.removeEventListener('pause', handlePause);
+    };
+  }, [currentTrack]);
+
+  // Auto-play when track changes if was playing before
+  useEffect(() => {
+    if (!currentTrack || !playerRef.current) return;
+
+    const trackChanged = previousTrackRef.current !== currentTrack.path;
+    const shouldAutoPlay = trackChanged && wasPlaying;
+    previousTrackRef.current = currentTrack.path;
+
+    if (shouldAutoPlay) {
+      // Wait for audio element to be ready, then play
+      const tryPlay = () => {
+        const audioElement = playerRef.current?.audio?.current;
+        if (audioElement) {
+          if (audioElement.readyState >= 2) {
+            // Already loaded enough to play
+            audioElement.play().catch((err) => {
+              console.log('Auto-play prevented:', err);
             });
-            
-            navigator.mediaSession.setActionHandler('previoustrack', onPrev);
-            navigator.mediaSession.setActionHandler('nexttrack', onNext);
+          } else {
+            // Wait for canplay event
+            const handleCanPlay = () => {
+              audioElement.play().catch((err) => {
+                console.log('Auto-play prevented:', err);
+              });
+              audioElement.removeEventListener('canplay', handleCanPlay);
+            };
+            audioElement.addEventListener('canplay', handleCanPlay);
+            return () => {
+              audioElement.removeEventListener('canplay', handleCanPlay);
+            };
+          }
         }
+      };
+
+      // Try immediately and also after a delay
+      tryPlay();
+      const timer = setTimeout(tryPlay, 200);
+      return () => clearTimeout(timer);
     }
-  }, [currentTrack, onNext, onPrev]);
+
+    // Media Session API Setup
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.filename,
+        artist: 'HypnoChunk',
+        album: 'English Learning',
+      });
+      
+      navigator.mediaSession.setActionHandler('previoustrack', onPrev);
+      navigator.mediaSession.setActionHandler('nexttrack', onNext);
+    }
+  }, [currentTrack, wasPlaying, onNext, onPrev]);
 
   // Listen to audio time updates
   useEffect(() => {
@@ -86,6 +161,86 @@ export default function CustomAudioPlayer({ currentTrack, onNext, onPrev, onClos
     };
   }, [currentTrack, onTimeUpdate]);
 
+  // Control button states based on hasPrevious/hasNext
+  useEffect(() => {
+    if (!mounted || !currentTrack) return;
+
+    const updateButtonStates = () => {
+      // Try multiple ways to find the container
+      const container = 
+        playerRef.current?.audio?.current?.closest('.rhap_container') ||
+        document.querySelector('.rhap_container');
+      
+      if (!container) return;
+
+      // Find buttons - try multiple selectors
+      const prevButton = container.querySelector(
+        '.rhap_skip-button[aria-label*="Previous"], .rhap_skip-button[aria-label*="上一"], .rhap_button-clear:first-of-type'
+      ) as HTMLElement;
+      
+      const nextButton = container.querySelector(
+        '.rhap_skip-button[aria-label*="Next"], .rhap_skip-button[aria-label*="下一"], .rhap_button-clear:last-of-type'
+      ) as HTMLElement;
+
+      // Alternative: find by position (previous is usually first skip button, next is last)
+      const allSkipButtons = container.querySelectorAll('.rhap_skip-button') as NodeListOf<HTMLElement>;
+      const prevBtn = allSkipButtons[0];
+      const nextBtn = allSkipButtons[allSkipButtons.length - 1];
+
+      const finalPrevButton = prevButton || prevBtn;
+      const finalNextButton = nextButton || nextBtn;
+
+      if (finalPrevButton) {
+        if (hasPrevious) {
+          finalPrevButton.style.opacity = '1';
+          finalPrevButton.style.cursor = 'pointer';
+          finalPrevButton.style.pointerEvents = 'auto';
+          finalPrevButton.removeAttribute('data-disabled');
+        } else {
+          finalPrevButton.style.opacity = '0.3';
+          finalPrevButton.style.cursor = 'not-allowed';
+          finalPrevButton.style.pointerEvents = 'none';
+          finalPrevButton.setAttribute('data-disabled', 'true');
+        }
+      }
+
+      if (finalNextButton) {
+        if (hasNext) {
+          finalNextButton.style.opacity = '1';
+          finalNextButton.style.cursor = 'pointer';
+          finalNextButton.style.pointerEvents = 'auto';
+          finalNextButton.removeAttribute('data-disabled');
+        } else {
+          finalNextButton.style.opacity = '0.3';
+          finalNextButton.style.cursor = 'not-allowed';
+          finalNextButton.style.pointerEvents = 'none';
+          finalNextButton.setAttribute('data-disabled', 'true');
+        }
+      }
+    };
+
+    // Wait for player to render, try multiple times
+    const timers = [
+      setTimeout(updateButtonStates, 50),
+      setTimeout(updateButtonStates, 200),
+      setTimeout(updateButtonStates, 500),
+      setTimeout(updateButtonStates, 1000),
+    ];
+    updateButtonStates();
+
+    // Also use MutationObserver to catch when buttons are added
+    const observer = new MutationObserver(updateButtonStates);
+    const container = document.querySelector('.rhap_container');
+    if (container) {
+      observer.observe(container, { childList: true, subtree: true });
+    }
+
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+      observer.disconnect();
+    };
+  }, [mounted, hasPrevious, hasNext, currentTrack]);
+
   // Avoid Hydration Mismatch by only rendering on client
   if (!mounted) return null;
 
@@ -113,20 +268,42 @@ export default function CustomAudioPlayer({ currentTrack, onNext, onPrev, onClos
       {/* The Player Component */}
       <div className="px-1 sm:px-2 pb-2 sm:pb-3">
         {currentTrack ? (
-          <AudioPlayer
-              ref={playerRef}
-              autoPlay={false}
-              src={currentTrack.path}
-              onEnded={onNext}
-              onClickPrevious={onPrev}
-              onClickNext={onNext}
-              showSkipControls={true}
-              showJumpControls={false}
-              layout="stacked-reverse" 
-              customAdditionalControls={[]}
-              customVolumeControls={[]} 
-              showFilledVolume={false}
-          />
+          <>
+            <AudioPlayer
+                ref={playerRef}
+                autoPlay={false}
+                src={currentTrack.path}
+                onEnded={onTrackEnded || (hasNext ? onNext : undefined)}
+                onClickPrevious={hasPrevious ? onPrev : undefined}
+                onClickNext={hasNext ? onNext : undefined}
+                showSkipControls={true}
+                showJumpControls={true}
+                jumpInterval={10}
+                layout="stacked-reverse" 
+                customAdditionalControls={[
+                  <button
+                    key="play-mode"
+                    onClick={() => {
+                      if (!onPlayModeChange) return;
+                      const modes: PlayMode[] = ['normal', 'repeat-all', 'repeat-one', 'shuffle'];
+                      const currentIndex = modes.indexOf(playMode);
+                      const nextIndex = (currentIndex + 1) % modes.length;
+                      onPlayModeChange(modes[nextIndex]);
+                    }}
+                    className="rhap_button-clear rhap_repeat-button"
+                    aria-label="Play mode"
+                    title={`Play mode: ${playMode}`}
+                  >
+                    {playMode === 'repeat-all' && <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />}
+                    {playMode === 'repeat-one' && <Repeat1 className="w-4 h-4 sm:w-5 sm:h-5" />}
+                    {playMode === 'shuffle' && <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />}
+                    {playMode === 'normal' && <Repeat className="w-4 h-4 sm:w-5 sm:h-5 opacity-30" />}
+                  </button>
+                ]}
+                customVolumeControls={[]} 
+                showFilledVolume={false}
+            />
+          </>
         ) : (
           <div className="p-4 text-center text-gray-400 text-sm">
               Select a track to start playing...

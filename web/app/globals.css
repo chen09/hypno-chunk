@@ -86,8 +86,51 @@ html, body {
 
 .rhap_skip-button {
   color: #6b7280 !important; /* gray-500 */
+  transition: opacity 0.2s ease, color 0.2s ease;
 }
 
 .rhap_skip-button:hover {
+  color: #2563eb !important; /* blue-600 */
+}
+
+/* Disabled state for skip buttons */
+.rhap_skip-button[data-disabled="true"] {
+  color: #9ca3af !important; /* gray-400 - lighter gray when disabled */
+  cursor: not-allowed !important;
+}
+
+.rhap_skip-button[data-disabled="true"]:hover {
+  color: #9ca3af !important; /* Keep gray on hover when disabled */
+}
+
+/* Play mode button styling */
+.rhap_repeat-button {
+  color: #6b7280 !important; /* gray-500 */
+  transition: color 0.2s ease;
+}
+
+.rhap_repeat-button:hover {
+  color: #2563eb !important; /* blue-600 */
+}
+
+.rhap_repeat-button svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+@media (min-width: 640px) {
+  .rhap_repeat-button svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+}
+
+/* Jump buttons (fast forward/rewind) styling */
+.rhap_jump-button {
+  color: #6b7280 !important; /* gray-500 */
+  transition: color 0.2s ease;
+}
+
+.rhap_jump-button:hover {
   color: #2563eb !important; /* blue-600 */
 }

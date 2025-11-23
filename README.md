@@ -2,6 +2,12 @@
 
 An English learning audio player and content generation pipeline.
 
+## CI/CD
+
+This project uses GitHub Actions for CI/CD:
+- **CI**: Runs on pull requests to `main` branch (lint, type check, build)
+- **CD**: Builds and pushes Docker image to Docker Hub when code is merged to `main`
+
 ## Project Structure
 
 This project is organized as a monorepo with the following components:

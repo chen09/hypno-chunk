@@ -241,6 +241,66 @@ export default function CustomAudioPlayer({
     };
   }, [mounted, hasPrevious, hasNext, currentTrack]);
 
+  // Override jump buttons to use 10 seconds interval
+  useEffect(() => {
+    if (!mounted || !currentTrack || !playerRef.current) return;
+
+    const setupJumpButtons = () => {
+      const audioElement = playerRef.current?.audio?.current;
+      if (!audioElement) return;
+
+      const container = audioElement.closest('.rhap_container');
+      if (!container) return;
+
+      // Find jump buttons
+      const jumpButtons = container.querySelectorAll('.rhap_jump-button');
+      jumpButtons.forEach((button) => {
+        const btn = button as HTMLElement;
+        const originalOnClick = btn.onclick;
+        
+        // Check if it's rewind or forward by checking aria-label or class
+        const isRewind = btn.getAttribute('aria-label')?.toLowerCase().includes('rewind') ||
+                         btn.classList.contains('rhap_rewind-button') ||
+                         btn.querySelector('.rhap_rewind-button') !== null;
+        
+        btn.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          if (isRewind) {
+            audioElement.currentTime = Math.max(0, audioElement.currentTime - 10);
+          } else {
+            const duration = audioElement.duration || 0;
+            audioElement.currentTime = Math.min(duration, audioElement.currentTime + 10);
+          }
+        };
+      });
+    };
+
+    // Wait for buttons to render
+    const timers = [
+      setTimeout(setupJumpButtons, 100),
+      setTimeout(setupJumpButtons, 300),
+      setTimeout(setupJumpButtons, 500),
+    ];
+
+    // Also observe for button changes
+    const container = playerRef.current?.audio?.current?.closest('.rhap_container');
+    if (container) {
+      const observer = new MutationObserver(setupJumpButtons);
+      observer.observe(container, { childList: true, subtree: true });
+      
+      return () => {
+        timers.forEach(timer => clearTimeout(timer));
+        observer.disconnect();
+      };
+    }
+
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+    };
+  }, [mounted, currentTrack]);
+
   // Avoid Hydration Mismatch by only rendering on client
   if (!mounted) return null;
 
@@ -278,7 +338,6 @@ export default function CustomAudioPlayer({
                 onClickNext={hasNext ? onNext : undefined}
                 showSkipControls={true}
                 showJumpControls={true}
-                jumpInterval={10}
                 layout="stacked-reverse" 
                 customAdditionalControls={[
                   <button

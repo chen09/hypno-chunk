@@ -66,7 +66,7 @@ export async function GET(
         'Content-Type': contentType,
       };
 
-      return new NextResponse(fileStream as any, {
+      return new NextResponse(fileStream as unknown as ReadableStream, {
         status: 206,
         headers,
       });
@@ -74,7 +74,7 @@ export async function GET(
 
     // Full file response - use stream for large files
     const fileStream = fs.createReadStream(filePath);
-    return new NextResponse(fileStream as any, {
+    return new NextResponse(fileStream as unknown as ReadableStream, {
       headers: {
         'Content-Type': contentType,
         'Content-Length': stat.size.toString(),

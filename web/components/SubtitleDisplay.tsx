@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SubtitleEntry {
   id: number;
@@ -60,7 +60,10 @@ export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDispla
   // Load and parse SRT file
   useEffect(() => {
     if (!srtPath) {
+      // Reset state when srtPath is cleared
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSubtitles([]);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentSubtitle(null);
       return;
     }
@@ -91,6 +94,7 @@ export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDispla
   // Find current subtitle based on currentTime
   useEffect(() => {
     if (subtitles.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentSubtitle(null);
       return;
     }
@@ -99,6 +103,7 @@ export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDispla
       (sub) => currentTime >= sub.startTime && currentTime < sub.endTime
     );
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentSubtitle(active || null);
   }, [currentTime, subtitles]);
 

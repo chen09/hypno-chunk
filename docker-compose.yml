@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  web:
+    image: chen920/hypnochunk-web:latest
+    container_name: hypnochunk-web
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/www/hypnochunk/data/2_audio_output:/app/audio:ro
+    environment:
+      - AUDIO_DIR=/app/audio
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/files"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+

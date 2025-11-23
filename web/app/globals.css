@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile to feel more app-like */
+}
+
+/* Safe area for iPhone X+ */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Ensure audio player container is fixed at top */
+#audio-player-container {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 99999 !important;
+}
+
+/* Ensure subtitle container is fixed below player */
+#subtitle-container {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 99998 !important;
+  background-color: #ffffff !important;
+}
+
+/* Ensure react-h5-audio-player is visible */
+.rhap_container {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.rhap_main-controls {
+  display: flex !important;
+  visibility: visible !important;
+}
+
+.rhap_play-pause-button {
+  display: flex !important;
+  visibility: visible !important;
+}
+
+/* Customize player colors */
+.rhap_main-controls-button {
+  color: #2563eb !important; /* blue-600 */
+}
+
+.rhap_play-pause-button {
+  color: #2563eb !important; /* blue-600 */
+  font-size: 32px !important; /* Mobile */
+}
+
+@media (min-width: 640px) {
+  .rhap_play-pause-button {
+    font-size: 40px !important; /* Tablet and desktop */
+  }
+}
+
+.rhap_progress-filled {
+  background-color: #2563eb !important; /* blue-600 */
+}
+
+.rhap_progress-indicator {
+  background-color: #2563eb !important; /* blue-600 */
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.4) !important;
+}
+
+.rhap_time {
+  color: #6b7280 !important; /* gray-500 */
+  font-size: 11px !important; /* Mobile */
+}
+
+@media (min-width: 640px) {
+  .rhap_time {
+    font-size: 12px !important; /* Tablet and desktop */
+  }
+}
+
+.rhap_skip-button {
+  color: #6b7280 !important; /* gray-500 */
+}
+
+.rhap_skip-button:hover {
+  color: #2563eb !important; /* blue-600 */
+}

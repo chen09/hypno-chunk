@@ -12,14 +12,11 @@ interface FileObject {
 
 export async function GET() {
   try {
-    // In production, we need to scan the specific server directory
-    // In local dev (when running from /Volumes/WDC2T/HypnoChunk/web), 
-    // the data is at ../data/2_audio_output
-    
-    // Use an environment variable or default to relative path
-    // For this specific project structure:
-    const projectRoot = path.resolve(process.cwd(), '..'); 
-    const audioDir = path.join(projectRoot, 'data', '2_audio_output');
+    // Use environment variable AUDIO_DIR if set, otherwise use default relative path
+    const audioDir = process.env.AUDIO_DIR || (() => {
+      const projectRoot = path.resolve(process.cwd(), '..');
+      return path.join(projectRoot, 'data', '2_audio_output');
+    })();
     
     // If we are on the server (production), the path might need adjustment 
     // if the app is built and running from a different location.

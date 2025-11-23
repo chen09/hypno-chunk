@@ -14,10 +14,12 @@ interface CustomAudioPlayerProps {
 export default function CustomAudioPlayer({ currentTrack, onNext, onPrev, onClose, onTimeUpdate }: CustomAudioPlayerProps) {
   const playerRef = useRef<AudioPlayer>(null);
   // Use useState with a function to avoid hydration mismatch
-  const [mounted, setMounted] = useState(() => false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     // Set mounted after component mounts on client side
+    // This is necessary to avoid hydration mismatch in Next.js
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 

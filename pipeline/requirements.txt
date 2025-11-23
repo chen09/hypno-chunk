@@ -1,0 +1,7 @@
+yt-dlp
+edge-tts
+openai
+python-dotenv
+pydub
+openai-whisper
+torch

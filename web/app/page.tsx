@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import useSWR from 'swr';
 import AudioPlayer from '@/components/AudioPlayer';
 import SubtitleDisplay from '@/components/SubtitleDisplay';
-import { PlayCircle } from 'lucide-react';
+import { PlayCircle, Play } from 'lucide-react';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -22,6 +22,16 @@ export default function Home() {
   const trackItemRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
 
   const files = data?.files || [];
+  
+  // Type for file object with displayName
+  type FileWithDisplayName = {
+    filename: string;
+    displayName?: string;
+    category?: string;
+    path: string;
+    size: number;
+    date: string;
+  };
   
   // Generate shuffled indices when files change or shuffle mode is enabled
   useEffect(() => {
@@ -306,49 +316,144 @@ export default function Home() {
           </div>
         )}
 
-        <div className="space-y-2">
-          {files.map((file: { filename: string; path: string; size: number; date: string }, index: number) => {
-            // Use actualTrackIndex for highlighting in shuffle mode
-            const isSelected = actualTrackIndex === index;
-            return (
-            <div 
-              key={`${file.filename}-${index}`}
-              ref={(el) => {
-                trackItemRefs.current[index] = el;
-              }}
-              onClick={() => playTrack(index)}
-              className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors active:scale-[0.99]
-                ${isSelected
-                  ? 'bg-blue-50 border border-blue-100' 
-                  : 'bg-white border border-transparent hover:bg-gray-100 border-gray-100 shadow-sm'
-                }`}
-            >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
-                ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}
-              `}>
-                {isSelected ? (
-                  <div className="flex gap-0.5 items-end h-3">
-                     <div className="w-0.5 h-2 bg-white animate-pulse"></div>
-                     <div className="w-0.5 h-3 bg-white animate-pulse delay-75"></div>
-                     <div className="w-0.5 h-1 bg-white animate-pulse delay-150"></div>
+        {/* Group files by category */}
+        {(() => {
+          // Group files by category
+          const filesByCategory: { [key: string]: { files: FileWithDisplayName[], indices: number[] } } = {};
+          const uncategorized: { files: FileWithDisplayName[], indices: number[] } = { files: [], indices: [] };
+          
+          files.forEach((file: FileWithDisplayName, index: number) => {
+            const category = file.category || '未分类';
+            if (category === '未分类') {
+              uncategorized.files.push(file);
+              uncategorized.indices.push(index);
+            } else {
+              if (!filesByCategory[category]) {
+                filesByCategory[category] = { files: [], indices: [] };
+              }
+              filesByCategory[category].files.push(file);
+              filesByCategory[category].indices.push(index);
+            }
+          });
+          
+          // Get sorted categories (prefer "英语学习" first, then "小说", then others)
+          const categoryOrder = ['英语学习', '小说'];
+          const sortedCategories = [
+            ...categoryOrder.filter(cat => filesByCategory[cat]),
+            ...Object.keys(filesByCategory).filter(cat => !categoryOrder.includes(cat))
+          ];
+          
+          return (
+            <div className="space-y-6">
+              {/* Render categorized files */}
+              {sortedCategories.map((category) => {
+                const { files: categoryFiles, indices: categoryIndices } = filesByCategory[category];
+                return (
+                  <div key={category} className="space-y-3">
+                    <h2 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
+                      {category}
+                      <span className="ml-2 text-sm font-normal text-gray-500">
+                        ({categoryFiles.length})
+                      </span>
+                    </h2>
+                    <div className="space-y-2">
+                      {categoryFiles.map((file: FileWithDisplayName, categoryIndex: number) => {
+                        const originalIndex = categoryIndices[categoryIndex];
+                        const isSelected = actualTrackIndex === originalIndex;
+                        const displayName = file.displayName || file.filename.replace('_merged_final.mp3', '');
+                        return (
+                          <div 
+                            key={`${file.filename}-${originalIndex}`}
+                            ref={(el) => {
+                              trackItemRefs.current[originalIndex] = el;
+                            }}
+                            onClick={() => playTrack(originalIndex)}
+                            className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 active:scale-[0.99]
+                              ${isSelected
+                                ? 'bg-blue-50 border border-blue-300 shadow-sm shadow-blue-50' 
+                                : 'bg-white border border-gray-100 hover:bg-gray-50 hover:border-gray-200 shadow-sm'
+                              }`}
+                          >
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors
+                              ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}
+                            `}>
+                              {isSelected ? (
+                                <Play className="w-5 h-5 fill-white" />
+                              ) : (
+                                <PlayCircle className="w-5 h-5" />
+                              )}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              <h3 className={`font-medium text-sm truncate transition-colors ${isSelected ? 'text-blue-700 font-semibold' : 'text-gray-900'}`}>
+                                {displayName}
+                              </h3>
+                              <p className={`text-xs mt-0.5 transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-500'}`}>
+                                {(file.size / 1024 / 1024).toFixed(1)} MB • {new Date(file.date).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                ) : (
-                  <PlayCircle className="w-5 h-5" />
-                )}
-              </div>
+                );
+              })}
               
-              <div className="flex-1 min-w-0">
-                <h3 className={`font-medium text-sm truncate ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
-                  {file.filename}
-                </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {(file.size / 1024 / 1024).toFixed(1)} MB • {new Date(file.date).toLocaleDateString()}
-                </p>
-              </div>
+              {/* Render uncategorized files if any */}
+              {uncategorized.files.length > 0 && (
+                <div className="space-y-3">
+                  <h2 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
+                    未分类
+                    <span className="ml-2 text-sm font-normal text-gray-500">
+                      ({uncategorized.files.length})
+                    </span>
+                  </h2>
+                  <div className="space-y-2">
+                    {uncategorized.files.map((file: FileWithDisplayName, categoryIndex: number) => {
+                      const originalIndex = uncategorized.indices[categoryIndex];
+                      const isSelected = actualTrackIndex === originalIndex;
+                      const displayName = file.displayName || file.filename.replace('_merged_final.mp3', '');
+                      return (
+                        <div 
+                          key={`${file.filename}-${originalIndex}`}
+                          ref={(el) => {
+                            trackItemRefs.current[originalIndex] = el;
+                          }}
+                          onClick={() => playTrack(originalIndex)}
+                          className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-200 active:scale-[0.99]
+                            ${isSelected
+                              ? 'bg-blue-50 border border-blue-300 shadow-sm shadow-blue-50' 
+                              : 'bg-white border border-gray-100 hover:bg-gray-50 hover:border-gray-200 shadow-sm'
+                            }`}
+                        >
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors
+                            ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}
+                          `}>
+                            {isSelected ? (
+                              <Play className="w-5 h-5 fill-white" />
+                            ) : (
+                              <PlayCircle className="w-5 h-5" />
+                            )}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <h3 className={`font-medium text-sm truncate transition-colors ${isSelected ? 'text-blue-700 font-semibold' : 'text-gray-900'}`}>
+                              {displayName}
+                            </h3>
+                            <p className={`text-xs mt-0.5 transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-500'}`}>
+                              {(file.size / 1024 / 1024).toFixed(1)} MB • {new Date(file.date).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-            );
-          })}
-        </div>
+          );
+        })()}
       </main>
     </div>
   );

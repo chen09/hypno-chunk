@@ -133,6 +133,8 @@ class AudioGenerator:
         logger.info(f"Starting audio generation for {len(modules)} modules...")
         if target_indices:
             logger.info(f"Targeting specific modules: {target_indices}")
+        else:
+            logger.info(f"Processing all {len(modules)} modules")
         
         combined_audio = AudioSegment.empty()
         srt_entries = []
@@ -142,6 +144,7 @@ class AudioGenerator:
         # If a module is skipped (not in target_indices), we try to load its existing file.
         
         processed_count = 0
+        start_time = asyncio.get_event_loop().time()
 
         for index, module in enumerate(modules):
             module_idx = index + 1
@@ -161,11 +164,11 @@ class AudioGenerator:
 
             if should_process:
                 processed_count += 1
-                logger.info(f"Processing module {module_idx}/{len(modules)}: {phrase}")
-                
-                # --- GENERATE AUDIO ---
                 meaning = module.get("chinese_meaning", "")
                 examples = module.get("examples", [])
+                logger.info(f"Processing module {module_idx}/{len(modules)}: {phrase or '(no module name)'} ({len(examples)} examples)")
+                
+                # --- GENERATE AUDIO ---
 
                 # --- 1. Generate Audio Segments for this Module ---
                 current_module_audio = AudioSegment.empty()
@@ -233,15 +236,17 @@ class AudioGenerator:
                     module_offset_ms += len(seg)
                     return seg
 
-                # 1. Module Name (EN)
-                await add_module_segment(phrase, self.voice, "+0%")
-                await add_module_segment("", "", "", is_p=True, p_dur=500) # Short pause
+                # 1. Module Name (EN) - only if exists
+                if phrase:
+                    await add_module_segment(phrase, self.voice, "+0%")
+                    await add_module_segment("", "", "", is_p=True, p_dur=500) # Short pause
 
-                # 3. Chinese Meaning (CN)
-                await add_module_segment(meaning, self.chinese_voice, "+0%")
-                await add_module_segment("", "", "", is_p=True, p_dur=2000) # Long pause
+                # 2. Chinese Meaning (CN) - only if exists
+                if meaning:
+                    await add_module_segment(meaning, self.chinese_voice, "+0%")
+                    await add_module_segment("", "", "", is_p=True, p_dur=2000) # Long pause
 
-                # 5 & 7. Examples (CN -> EN Slow -> EN Standard)
+                # 3-5. Examples: EN Slow -> CN Translation -> EN Fast
                 for i, ex in enumerate(examples):
                     en_text = ""
                     cn_text = ""
@@ -255,32 +260,41 @@ class AudioGenerator:
                         continue
                         
                     if en_text:
-                        # 1. Chinese (Context)
+                        # 1. English Slow (先听慢速英文，建立语音印象)
+                        await add_module_segment(en_text, self.voice, self.rate_en_slow)
+                        await add_module_segment("", "", "", is_p=True, p_dur=500)
+
+                        # 2. Chinese Translation (再听中文翻译，确认理解)
                         if cn_text:
                             await add_module_segment(cn_text, self.chinese_voice, self.rate_cn)
                             await add_module_segment("", "", "", is_p=True, p_dur=500)
-
-                        # 2. English Slow (Detail)
-                        await add_module_segment(en_text, self.voice, self.rate_en_slow)
-                        await add_module_segment("", "", "", is_p=True, p_dur=500)
                         
-                        # 3. English Standard/Fast (Practice)
+                        # 3. English Fast (最后听快速英文，熟悉正常语速)
                         await add_module_segment(en_text, self.voice, self.rate_en_fast)
                         
                         if i < len(examples) - 1:
                             await add_module_segment("", "", "", is_p=True, p_dur=2000)
                         else:
                             await add_module_segment("", "", "", is_p=True, p_dur=500)
+                    
+                    # Log progress every 10 examples or at the end
+                    if (i + 1) % 10 == 0 or (i + 1) == len(examples):
+                        logger.info(f"  Example progress: {i+1}/{len(examples)} examples processed")
                 
-                await add_module_segment(phrase, self.voice, "+0%")
-                await add_module_segment("", "", "", is_p=True, p_dur=4000)
+                # 6. Module Name (EN) - only if exists (重复模块名)
+                if phrase:
+                    await add_module_segment(phrase, self.voice, "+0%")
+                    await add_module_segment("", "", "", is_p=True, p_dur=4000)
 
                 # Save Individual Files
+                module_duration_sec = len(current_module_audio) / 1000.0
+                logger.info(f"  Saving module audio ({module_duration_sec:.1f}s) to {module_audio_path.name}")
                 current_module_audio.export(module_audio_path, format="mp3")
                 with open(module_json_path, 'w', encoding='utf-8') as f:
                     json.dump(module, f, indent=4, ensure_ascii=False)
                 
                 module_audio = current_module_audio
+                logger.info(f"✓ Module {module_idx}/{len(modules)} completed ({module_duration_sec:.1f}s)")
                 
                 # Save module SRT entries for later global adjustment
                 # We can also attach them to the module object if we wanted to save individual SRTs

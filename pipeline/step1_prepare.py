@@ -62,8 +62,11 @@ def main():
 
     video_url = sys.argv[1]
     
-    # Setup directories
-    raw_dir = Path("data/0_raw_videos")
+    # Setup directories - use project root data directory
+    # Get project root (parent of pipeline directory)
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    raw_dir = project_root / "data" / "0_raw_videos"
     raw_dir.mkdir(parents=True, exist_ok=True)
     
     try:
@@ -76,7 +79,7 @@ def main():
 
         # 2. Transcribe to SRT
         logger.info("=== Step 1.2: Transcribing to SRT (Whisper) ===")
-        transcriber = AudioTranscriber(model_size="base") # Use 'base' or 'small' for speed
+        transcriber = AudioTranscriber(model_size="large") # Use 'large' for best quality
         srt_path = transcriber.transcribe_audio(audio_path)
         logger.info(f"SRT generated: {srt_path}")
 

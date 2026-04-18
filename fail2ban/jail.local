@@ -1,0 +1,93 @@
+[DEFAULT]
+# 默认配置
+# 封禁时间（秒），1小时
+bantime = 3600
+# 查找时间窗口（秒），10分钟内
+findtime = 600
+# 最大重试次数
+maxretry = 5
+# 使用 systemd 作为后端
+backend = systemd
+destemail = root@localhost
+sendername = Fail2Ban
+# 默认动作：使用 iptables
+action = %(action_)s
+
+# 忽略本地 IP
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+# SSH 保护
+enabled = true
+port = ssh
+logpath = %(sshd_log)s
+backend = %(sshd_backend)s
+# SSH 更严格：3次失败就封禁
+maxretry = 3
+# SSH 封禁 2 小时
+bantime = 7200
+# 5 分钟内
+findtime = 300
+
+[nginx-http-auth]
+# Nginx HTTP 认证失败（如果有使用）
+enabled = false
+port = http,https
+logpath = /var/log/nginx/error.log
+
+[nginx-limit-req]
+# Nginx 限流保护（防止请求频率过高）
+enabled = true
+port = http,https
+logpath = /var/log/nginx/error.log
+maxretry = 10
+findtime = 60
+bantime = 600
+
+[nginx-botsearch]
+# 防止恶意爬虫和扫描
+enabled = true
+port = http,https
+logpath = /var/log/nginx/access.log
+filter = nginx-botsearch
+maxretry = 5
+findtime = 300
+bantime = 3600
+
+[nginx-noscript]
+# 防止脚本注入攻击
+enabled = true
+port = http,https
+logpath = /var/log/nginx/access.log
+filter = nginx-noscript
+maxretry = 3
+findtime = 300
+bantime = 3600
+
+[nginx-badbots]
+# 阻止恶意爬虫
+enabled = true
+port = http,https
+logpath = /var/log/nginx/access.log
+filter = nginx-badbots
+maxretry = 2
+findtime = 600
+# 封禁 24 小时
+bantime = 86400
+
+[nginx-noproxy]
+# 防止代理滥用
+enabled = false
+port = http,https
+logpath = /var/log/nginx/access.log
+
+[recidive]
+# 累犯：多次被封禁的 IP 会被更长时间封禁
+enabled = true
+logpath = /var/log/fail2ban.log
+action = %(action_mwl)s
+# 24 小时
+bantime = 86400
+# 24 小时内
+findtime = 86400
+maxretry = 3

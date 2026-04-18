@@ -27,8 +27,11 @@ class SemanticExtractor:
             base_url (str): Custom base URL for API compatible services (e.g., DeepSeek).
         """
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-        # Ensure output directory exists
-        self.output_dir = Path("data/1_extracted_json")
+        # Ensure output directory exists - use project root data directory
+        # Get project root (parent of pipeline directory)
+        script_dir = Path(__file__).parent.parent  # Go up from src/ to pipeline/
+        project_root = script_dir.parent  # Go up from pipeline/ to project root
+        self.output_dir = project_root / "data" / "1_extracted_json"
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Chunking settings

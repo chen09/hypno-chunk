@@ -17,30 +17,59 @@ from src.translator import JSONTranslator
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def merge_json_parts(input_arg: str) -> str:
+def merge_json_parts(input_arg: str, format_type: str = None) -> str:
     """
     Smartly detect if the input is a video ID or a file path.
-    If parts (_part1.json, etc.) exist, merge them into a single file.
+    If parts (_part1.json, etc.) or chunks (_chunk01.json, etc.) exist, merge them into a single file.
     Returns the path to the file that should be used for generation.
+    
+    Args:
+        input_arg: Video ID or path to JSON file
+        format_type: Optional format type - 'part' or 'chunk'. If None, auto-detect both formats.
     """
+    # Get project root (parent of pipeline directory)
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    
     input_path = Path(input_arg)
-    json_dir = Path("data/1_extracted_json")
+    json_dir = project_root / "data" / "1_extracted_json"
     
     # Determine Base Name (Video ID)
     if input_path.exists() and input_path.is_file():
-        # If user provided a file, try to deduce ID from filename (e.g., id_part1.json -> id)
-        base_name = input_path.name.split('_part')[0].split('_extracted')[0]
-        # If the input file itself is not a part file, just use it
-        if "_part" not in input_path.name:
+        # If user provided a file, try to deduce ID from filename (e.g., id_part1.json -> id, id_chunk01.json -> id)
+        base_name = input_path.name.split('_part')[0].split('_chunk')[0].split('_extracted')[0]
+        # If the input file itself is not a part/chunk file, just use it
+        if "_part" not in input_path.name and "_chunk" not in input_path.name:
             logger.info(f"Using provided file directly: {input_path}")
             return str(input_path)
     else:
         # Assume input_arg is the ID itself
         base_name = input_arg
 
-    # Look for parts
-    pattern = str(json_dir / f"{base_name}_part*.json")
-    part_files = sorted(glob.glob(pattern))
+    # Look for parts/chunks based on format_type parameter
+    part_files = []
+    if format_type is None:
+        # Auto-detect: try both formats
+        pattern_part = str(json_dir / f"{base_name}_part*.json")
+        pattern_chunk = str(json_dir / f"{base_name}_chunk*.json")
+        part_files = sorted(glob.glob(pattern_part) + glob.glob(pattern_chunk))
+        if part_files:
+            # Determine which format was found
+            if any('_part' in f for f in part_files):
+                logger.info(f"Auto-detected format: part")
+            elif any('_chunk' in f for f in part_files):
+                logger.info(f"Auto-detected format: chunk")
+    elif format_type.lower() == 'part':
+        pattern = str(json_dir / f"{base_name}_part*.json")
+        part_files = sorted(glob.glob(pattern))
+        logger.info(f"Using format: part")
+    elif format_type.lower() == 'chunk':
+        pattern = str(json_dir / f"{base_name}_chunk*.json")
+        part_files = sorted(glob.glob(pattern))
+        logger.info(f"Using format: chunk")
+    else:
+        logger.error(f"Invalid format_type: {format_type}. Must be 'part' or 'chunk'.")
+        sys.exit(1)
     
     if not part_files:
         # No parts found. If input was a file, we returned already. 
@@ -62,6 +91,7 @@ def merge_json_parts(input_arg: str) -> str:
     
     merged_modules = []
     seen_modules = set()
+    seen_examples = set()  # For deduplication when module name is missing
     
     for part_file in part_files:
         try:
@@ -72,9 +102,23 @@ def merge_json_parts(input_arg: str) -> str:
                 for m in modules:
                     # Simple deduplication by module name (case-insensitive)
                     module_name = m.get("module", "").strip().lower()
-                    if module_name and module_name not in seen_modules:
-                        seen_modules.add(module_name)
-                        merged_modules.append(m)
+                    
+                    if module_name:
+                        # Has module name: deduplicate by module name
+                        if module_name not in seen_modules:
+                            seen_modules.add(module_name)
+                            merged_modules.append(m)
+                    else:
+                        # No module name: deduplicate by first example's English text
+                        examples = m.get("examples", [])
+                        if examples and len(examples) > 0:
+                            first_example_en = examples[0].get("en", "").strip().lower()
+                            if first_example_en and first_example_en not in seen_examples:
+                                seen_examples.add(first_example_en)
+                                merged_modules.append(m)
+                        else:
+                            # No examples either, just add it
+                            merged_modules.append(m)
                         
         except Exception as e:
             logger.error(f"Error reading {part_file}: {e}")
@@ -92,9 +136,9 @@ import argparse
 
 # ... (existing imports) ...
 
-async def process_generation(input_arg: str, rate_cn: str = None, rate_en_slow: str = None, rate_en_fast: str = None, target_indices: list[int] = None):
+async def process_generation(input_arg: str, rate_cn: str = None, rate_en_slow: str = None, rate_en_fast: str = None, target_indices: list[int] = None, format_type: str = None):
     # 0. Merge Parts (if any)
-    json_path = merge_json_parts(input_arg)
+    json_path = merge_json_parts(input_arg, format_type=format_type)
 
     # 1. Translate Examples (Safety Check)
     logger.info("=== Step 3.1: Checking/Translating Examples ===")
@@ -114,7 +158,10 @@ async def process_generation(input_arg: str, rate_cn: str = None, rate_en_slow: 
     # 2. Generate Audio
     logger.info(f"=== Step 3.2: Generating Audio from {processed_json_path} ===")
     
-    output_dir = "data/2_audio_output"
+    # Get project root (parent of pipeline directory)
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    output_dir = project_root / "data" / "2_audio_output"
     generator = AudioGenerator(output_dir=output_dir)
     
     # Set Rates if provided
@@ -137,10 +184,13 @@ def main():
     
     parser = argparse.ArgumentParser(description="Generate sleep learning audio from JSON.")
     parser.add_argument("input", help="Video ID or path to JSON file")
-    parser.add_argument("--cn-speed", default=None, help="Speed for Chinese audio (e.g. +10%)")
-    parser.add_argument("--en-slow", default=None, help="Speed for Slow English audio (e.g. -25%)")
-    parser.add_argument("--en-fast", default=None, help="Speed for Fast English audio (e.g. +5%)")
+    parser.add_argument("--format", "-f", choices=['part', 'chunk'], default=None, 
+                        help="JSON file format: part or chunk. Auto-detect if not specified")
+    parser.add_argument("--cn-speed", default=None, help="Speed for Chinese audio (e.g. +10%%)")
+    parser.add_argument("--en-slow", default=None, help="Speed for Slow English audio (e.g. -25%%)")
+    parser.add_argument("--en-fast", default=None, help="Speed for Fast English audio (e.g. +5%%)")
     parser.add_argument("--indices", default=None, help="Comma-separated list of module indices to regenerate (e.g. 1,2,5)")
+    parser.add_argument("--timeout", type=int, default=None, help="Timeout in seconds (default: no timeout)")
     
     args = parser.parse_args()
 
@@ -154,7 +204,22 @@ def main():
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(process_generation(args.input, args.cn_speed, args.en_slow, args.en_fast, target_indices))
+    
+    try:
+        if args.timeout:
+            logger.info(f"Setting timeout: {args.timeout} seconds")
+            loop.run_until_complete(asyncio.wait_for(
+                process_generation(args.input, args.cn_speed, args.en_slow, args.en_fast, target_indices, format_type=args.format),
+                timeout=args.timeout
+            ))
+        else:
+            loop.run_until_complete(process_generation(args.input, args.cn_speed, args.en_slow, args.en_fast, target_indices, format_type=args.format))
+    except asyncio.TimeoutError:
+        logger.error(f"❌ Generation timed out after {args.timeout} seconds")
+        print(f"\n❌ ERROR: Generation timed out after {args.timeout} seconds")
+        print("   The process may still be running in the background.")
+        print("   Check the output directory for partial files.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

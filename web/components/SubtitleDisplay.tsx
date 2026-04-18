@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { startTransition, useState, useEffect } from 'react';
 
 interface SubtitleEntry {
   id: number;
@@ -61,30 +61,34 @@ export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDispla
   useEffect(() => {
     if (!srtPath) {
       // Reset state when srtPath is cleared
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSubtitles([]);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCurrentSubtitle(null);
+      startTransition(() => {
+        setSubtitles([]);
+        setCurrentSubtitle(null);
+      });
       return;
     }
-
-    setLoading(true);
-    setError(null);
+    startTransition(() => {
+      setLoading(true);
+      setError(null);
+    });
 
     fetch(srtPath)
       .then((res) => {
+        if (res.status === 404) {
+          return '';
+        }
         if (!res.ok) {
           throw new Error(`Failed to load subtitle: ${res.statusText}`);
         }
         return res.text();
       })
       .then((content) => {
-        const parsed = parseSRT(content);
+        const parsed = content ? parseSRT(content) : [];
         setSubtitles(parsed);
+        setError(null);
         setLoading(false);
       })
       .catch((err) => {
-        console.error('Error loading subtitle:', err);
         setError(err.message);
         setLoading(false);
         setSubtitles([]);
@@ -94,8 +98,7 @@ export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDispla
   // Find current subtitle based on currentTime
   useEffect(() => {
     if (subtitles.length === 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCurrentSubtitle(null);
+      startTransition(() => setCurrentSubtitle(null));
       return;
     }
 
@@ -103,8 +106,7 @@ export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDispla
       (sub) => currentTime >= sub.startTime && currentTime < sub.endTime
     );
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCurrentSubtitle(active || null);
+    startTransition(() => setCurrentSubtitle(active || null));
   }, [currentTime, subtitles]);
 
   // Always render a fixed-height container to prevent layout shift

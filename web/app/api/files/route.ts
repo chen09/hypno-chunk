@@ -32,7 +32,7 @@ export async function GET() {
     // Load track name mapping (array format to preserve order)
     const trackNamesPath = path.join(audioDir, 'track_names.json');
     let trackNameMap: { [key: string]: string } = {};
-    let trackCategoryMap: { [key: string]: string } = {};
+    const trackCategoryMap: { [key: string]: string } = {};
     let trackOrder: string[] = [];
     
     if (fs.existsSync(trackNamesPath)) {
@@ -42,7 +42,7 @@ export async function GET() {
         
         // Support both array and object formats
         if (Array.isArray(trackNamesData)) {
-          trackNamesData.forEach((item: { filename: string; displayName: string; category?: string }, index: number) => {
+          trackNamesData.forEach((item: { filename: string; displayName: string; category?: string }) => {
             trackNameMap[item.filename] = item.displayName;
             trackOrder.push(item.filename);
             // Store category if available

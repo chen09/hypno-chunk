@@ -1,16 +1,26 @@
 import { useRef, useEffect, useState } from 'react';
-import AudioPlayer from 'react-h5-audio-player';
+import Link from 'next/link';
+import ReactH5AudioPlayer from 'react-h5-audio-player';
 import 'react-h5-audio-player/lib/styles.css';
-import { X, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
+import { History, Repeat, Repeat1, Shuffle, X } from 'lucide-react';
 
 type PlayMode = 'normal' | 'repeat-all' | 'repeat-one' | 'shuffle';
 
 interface CustomAudioPlayerProps {
-  currentTrack: { filename: string; path: string } | null;
+  currentTrack: {
+    filename: string;
+    path: string;
+    displayName?: string;
+    category?: string;
+  } | null;
   onNext: () => void;
   onPrev: () => void;
   onClose?: () => void;
   onTimeUpdate?: (currentTime: number) => void;
+  /** Seek to this time (seconds) once metadata is ready for the current track */
+  initialPosition?: number | null;
+  /** Notifies when the underlying `<audio>` element is available (or null when detached) */
+  onAudioReady?: (audio: HTMLAudioElement | null) => void;
   hasPrevious?: boolean;
   hasNext?: boolean;
   playMode?: PlayMode;
@@ -18,24 +28,27 @@ interface CustomAudioPlayerProps {
   onTrackEnded?: () => void;
 }
 
-export default function CustomAudioPlayer({ 
-  currentTrack, 
-  onNext, 
-  onPrev, 
-  onClose, 
-  onTimeUpdate, 
-  hasPrevious = false, 
+export default function CustomAudioPlayer({
+  currentTrack,
+  onNext,
+  onPrev,
+  onClose,
+  onTimeUpdate,
+  initialPosition = null,
+  onAudioReady,
+  hasPrevious = false,
   hasNext = false,
   playMode = 'normal',
   onPlayModeChange,
-  onTrackEnded
+  onTrackEnded,
 }: CustomAudioPlayerProps) {
-  const playerRef = useRef<AudioPlayer>(null);
+  const playerRef = useRef<InstanceType<typeof ReactH5AudioPlayer> | null>(null);
   // Use useState with a function to avoid hydration mismatch
   const [mounted, setMounted] = useState(false);
   // Track playing state to auto-play when switching tracks
   const [wasPlaying, setWasPlaying] = useState(false);
   const previousTrackRef = useRef<string | null>(null);
+  const seekAppliedForPathRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Set mounted after component mounts on client side
@@ -44,7 +57,11 @@ export default function CustomAudioPlayer({
     setMounted(true);
   }, []);
 
-  console.log("Render AudioPlayer. Mounted:", mounted, "Track:", currentTrack?.filename);
+  useEffect(() => {
+    if (!currentTrack?.filename) {
+      seekAppliedForPathRef.current = null;
+    }
+  }, [currentTrack?.filename]);
 
   // Track playing state
   useEffect(() => {
@@ -113,15 +130,95 @@ export default function CustomAudioPlayer({
     // Media Session API Setup
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.filename,
+        title: currentTrack.displayName || currentTrack.filename,
         artist: 'HypnoChunk',
-        album: 'English Learning',
+        album: currentTrack.category || 'HypnoChunk',
       });
       
       navigator.mediaSession.setActionHandler('previoustrack', onPrev);
       navigator.mediaSession.setActionHandler('nexttrack', onNext);
     }
   }, [currentTrack, wasPlaying, onNext, onPrev]);
+
+  // Resume playback position once per track load
+  useEffect(() => {
+    if (!mounted || !currentTrack) return;
+    if (initialPosition === null || initialPosition === undefined) return;
+
+    const pathKey = currentTrack.filename;
+    seekAppliedForPathRef.current = null;
+    let cancelled = false;
+    let cleanup: (() => void) | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const tryBind = () => {
+      const audioElement = playerRef.current?.audio?.current;
+      if (!audioElement) return null;
+
+      const applySeek = () => {
+        if (cancelled) return;
+        if (seekAppliedForPathRef.current === pathKey) return;
+        if (audioElement.readyState < HTMLMediaElement.HAVE_METADATA) return;
+        audioElement.currentTime = Math.max(0, initialPosition);
+        seekAppliedForPathRef.current = pathKey;
+      };
+
+      const onLoaded = () => {
+        applySeek();
+      };
+
+      audioElement.addEventListener('loadedmetadata', onLoaded);
+      applySeek();
+
+      return () => {
+        audioElement.removeEventListener('loadedmetadata', onLoaded);
+      };
+    };
+
+    const setup = () => {
+      if (cancelled) return;
+      cleanup?.();
+      cleanup = tryBind() ?? null;
+      if (!cleanup && !cancelled) {
+        timeoutId = setTimeout(setup, 50);
+      }
+    };
+
+    setup();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      cleanup?.();
+    };
+  }, [mounted, currentTrack, initialPosition]);
+
+  // Expose underlying <audio> for progress persistence
+  useEffect(() => {
+    if (!mounted || !currentTrack) {
+      onAudioReady?.(null);
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = () => {
+      const el = playerRef.current?.audio?.current ?? null;
+      onAudioReady?.(el);
+      if (!el && !cancelled) {
+        timeoutId = setTimeout(tick, 50);
+      }
+    };
+
+    tick();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      onAudioReady?.(null);
+    };
+  }, [mounted, currentTrack, onAudioReady]);
 
   // Listen to audio time updates
   useEffect(() => {
@@ -256,8 +353,7 @@ export default function CustomAudioPlayer({
       const jumpButtons = container.querySelectorAll('.rhap_jump-button');
       jumpButtons.forEach((button) => {
         const btn = button as HTMLElement;
-        const originalOnClick = btn.onclick;
-        
+
         // Check if it's rewind or forward by checking aria-label or class
         const isRewind = btn.getAttribute('aria-label')?.toLowerCase().includes('rewind') ||
                          btn.classList.contains('rhap_rewind-button') ||
@@ -312,24 +408,34 @@ export default function CustomAudioPlayer({
     >
       
       {/* Custom Header for Title and Close Button */}
-      <div className="flex items-center justify-between px-3 sm:px-4 pt-2 sm:pt-3 pb-2">
+      <div className="flex items-center justify-between px-3 sm:px-4 pt-2 sm:pt-3 pb-2 gap-2">
         <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-blue-900 text-xs sm:text-sm truncate">
-                {currentTrack ? currentTrack.filename : "Ready to Play"}
+                {currentTrack ? (currentTrack.displayName || currentTrack.filename) : "Ready to Play"}
             </h3>
         </div>
-        {onClose && (
-            <button onClick={onClose} className="p-1 ml-2 text-gray-400 hover:text-gray-600">
+        <div className="flex items-center shrink-0 gap-0.5">
+          <Link
+            href="/history"
+            className="p-2 text-gray-500 hover:text-blue-700 rounded-lg hover:bg-blue-50"
+            aria-label="Playback history"
+            title="History"
+          >
+            <History className="w-4 h-4 sm:w-5 sm:h-5" />
+          </Link>
+          {onClose && (
+            <button type="button" onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-        )}
+          )}
+        </div>
       </div>
 
       {/* The Player Component */}
       <div className="px-1 sm:px-2 pb-2 sm:pb-3">
         {currentTrack ? (
           <>
-            <AudioPlayer
+            <ReactH5AudioPlayer
                 ref={playerRef}
                 autoPlay={false}
                 src={currentTrack.path}

@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   web:
-    image: chen920/hypnochunk-web@sha256:4868f7f0780f5c17e7c5738af09a7a0527816a8e1325840c0f11993119f11733
+    image: chen920/hypnochunk-web:latest
     container_name: hypnochunk-web
     ports:
       - "127.0.0.1:3000:3000"

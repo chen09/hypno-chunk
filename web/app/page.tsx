@@ -8,7 +8,7 @@ import SubtitleDisplay from '@/components/SubtitleDisplay';
 import ContinueListeningCard, {
   type ContinueListeningSummary,
 } from '@/components/ContinueListeningCard';
-import { PlayCircle, Play } from 'lucide-react';
+import { BookOpen, Languages, PlayCircle } from 'lucide-react';
 import { history } from '@/lib/history';
 import { usePlaybackProgress } from '@/hooks/usePlaybackProgress';
 
@@ -25,6 +25,16 @@ type FileWithDisplayName = {
   date: string;
 };
 
+type HomeTab = 'english' | 'novel';
+
+function resolveTabByCategory(category?: string): HomeTab | null {
+  const normalized = category?.trim();
+  if (!normalized) return null;
+  if (normalized.includes('英语')) return 'english';
+  if (normalized.includes('小说')) return 'novel';
+  return null;
+}
+
 function HomeInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,6 +49,7 @@ function HomeInner() {
   const [playMode, setPlayMode] = useState<PlayMode>('normal');
   const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
   const [shuffleCurrentIndex, setShuffleCurrentIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<HomeTab>('english');
   const trackItemRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
   const [continueMeta, setContinueMeta] = useState<ContinueListeningSummary | null>(null);
@@ -86,6 +97,8 @@ function HomeInner() {
         if (cancelled) return;
         setInitialPosition(pos);
         setCurrentTrackIndex(idx);
+        const tab = resolveTabByCategory(files[idx]?.category);
+        if (tab) setActiveTab(tab);
         router.replace('/', { scroll: false });
         await refreshContinueMeta(files);
         return;
@@ -116,6 +129,8 @@ function HomeInner() {
           if (cancelled) return;
           setInitialPosition(item?.position ?? 0);
           setCurrentTrackIndex(idx);
+          const tab = resolveTabByCategory(files[idx]?.category);
+          if (tab) setActiveTab(tab);
           await refreshContinueMeta(files);
           return;
         }
@@ -195,6 +210,8 @@ function HomeInner() {
     const h = await history.get(file.filename);
     setInitialPosition(h?.position ?? 0);
     setCurrentTrackIndex(index);
+    const tab = resolveTabByCategory(file.category);
+    if (tab) setActiveTab(tab);
     await history.setLastPlayedId(file.filename);
   };
 
@@ -212,6 +229,8 @@ function HomeInner() {
       const pos = opts?.smartResume ? Math.max(0, (h?.position ?? 0) - 3) : (h?.position ?? 0);
       setInitialPosition(pos);
       setCurrentTrackIndex(index);
+      const tab = resolveTabByCategory(file.category);
+      if (tab) setActiveTab(tab);
       if (playMode === 'shuffle' && shuffledIndices.length > 0) {
         const shufflePos = shuffledIndices.indexOf(index);
         if (shufflePos !== -1) {
@@ -368,8 +387,91 @@ function HomeInner() {
     playTrack(idx, { smartResume: true });
   };
 
+  const categorizedEntries = useMemo(() => {
+    return files.map((file, index) => ({ file, index }));
+  }, [files]);
+
+  const englishEntries = useMemo(
+    () =>
+      categorizedEntries.filter(
+        ({ file }) => resolveTabByCategory(file.category) === 'english',
+      ),
+    [categorizedEntries],
+  );
+  const novelEntries = useMemo(
+    () =>
+      categorizedEntries.filter(
+        ({ file }) => resolveTabByCategory(file.category) === 'novel',
+      ),
+    [categorizedEntries],
+  );
+  const otherEntries = useMemo(
+    () =>
+      categorizedEntries.filter(
+        ({ file }) => resolveTabByCategory(file.category) === null,
+      ),
+    [categorizedEntries],
+  );
+
+  const activeEntries = activeTab === 'english' ? englishEntries : novelEntries;
+
+  const renderTrackCard = (file: FileWithDisplayName, originalIndex: number) => {
+    const isSelected = actualTrackIndex === originalIndex;
+    const displayName = file.displayName || file.filename.replace('_merged_final.mp3', '');
+
+    return (
+      <div
+        key={`${file.filename}-${originalIndex}`}
+        ref={(el) => {
+          trackItemRefs.current[originalIndex] = el;
+        }}
+        onClick={() => playTrack(originalIndex)}
+        className={`flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-all duration-200 active:scale-[0.99] ${
+          isSelected
+            ? 'border border-blue-300 dark:border-blue-700/50 bg-blue-50 dark:bg-blue-950/20 shadow-sm'
+            : 'border border-[var(--border)] bg-[var(--surface-card)] shadow-sm hover:border-gray-200 dark:hover:border-slate-600/60 hover:bg-gray-50 dark:hover:bg-[#1a2440]'
+        }`}
+      >
+        <div
+          className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
+            isSelected
+              ? 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-md shadow-blue-500/30'
+              : 'bg-[var(--border)] dark:bg-slate-800 text-[var(--text-muted)]'
+          }`}
+        >
+          {isSelected ? (
+            <span className="flex items-end gap-0.5 justify-center h-5 w-5">
+              <span className="eq-bar" />
+              <span className="eq-bar" />
+              <span className="eq-bar" />
+            </span>
+          ) : (
+            <PlayCircle className="h-5 w-5" />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <h3
+            className={`truncate text-sm font-medium transition-colors ${
+              isSelected ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-[var(--text)]'
+            }`}
+          >
+            {displayName}
+          </h3>
+          <p
+            className={`mt-0.5 text-xs transition-colors ${
+              isSelected ? 'text-blue-500 dark:text-blue-400' : 'text-[var(--text-muted)]'
+            }`}
+          >
+            {(file.size / 1024 / 1024).toFixed(1)} MB • {new Date(file.date).toLocaleDateString()}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--surface-muted)]">
       <AudioPlayer
         currentTrack={currentTrack}
         onNext={handleNext}
@@ -386,8 +488,8 @@ function HomeInner() {
 
       <div
         id="subtitle-container"
-        className="fixed left-0 right-0 z-[99998] border-b border-gray-200 bg-white"
-        style={{ top: `${playerHeight}px`, backgroundColor: '#ffffff' }}
+        className="fixed left-0 right-0 z-[99998]"
+        style={{ top: `${playerHeight}px` }}
       >
         <div className="mx-auto max-w-3xl">
           <SubtitleDisplay srtPath={srtPath} currentTime={currentTime} />
@@ -396,176 +498,92 @@ function HomeInner() {
 
       <main
         className="mx-auto max-w-3xl px-3 py-4 sm:px-4 sm:py-6 md:px-6"
-        style={{ paddingTop: `${playerHeight + subtitleHeight + 10}px` }}
+        style={{ paddingTop: `${playerHeight + subtitleHeight + 10}px`, paddingBottom: '132px' }}
       >
         {isLoading && (
-          <div className="flex animate-pulse justify-center py-10 text-gray-500">Loading library...</div>
+          <div className="flex animate-pulse justify-center py-10 text-[var(--text-muted)]">Loading library...</div>
         )}
 
         {error && (
-          <div className="rounded-lg bg-red-50 p-4 text-center text-sm text-red-600">
+          <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-4 text-center text-sm text-red-600 dark:text-red-400">
             Failed to load audio files
           </div>
         )}
 
         {!isLoading && files.length === 0 && (
-          <div className="py-10 text-center text-sm text-gray-500">No audio files found in the library.</div>
+          <div className="py-10 text-center text-sm text-[var(--text-muted)]">No audio files found in the library.</div>
         )}
 
         {!isLoading && files.length > 0 && <ContinueListeningCard summary={continueMeta} onSmartResume={onSmartResume} />}
 
-        {!isLoading &&
-          files.length > 0 &&
-          (() => {
-            const filesByCategory: { [key: string]: { files: FileWithDisplayName[]; indices: number[] } } = {};
-            const uncategorized: { files: FileWithDisplayName[]; indices: number[] } = { files: [], indices: [] };
+        {!isLoading && files.length > 0 && (
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <h2 className="border-b border-[var(--border)] pb-2 text-lg font-semibold text-[var(--text)]">
+                {activeTab === 'english' ? '英语学习' : '小说'}
+                <span className="ml-2 text-sm font-normal text-[var(--text-muted)]">({activeEntries.length})</span>
+              </h2>
+              {activeEntries.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)] py-3">这个分类还没有音频。</p>
+              ) : (
+                <div className="space-y-2">
+                  {activeEntries.map(({ file, index }) => renderTrackCard(file, index))}
+                </div>
+              )}
+            </div>
 
-            files.forEach((file: FileWithDisplayName, index: number) => {
-              const category = file.category || '未分类';
-              if (category === '未分类') {
-                uncategorized.files.push(file);
-                uncategorized.indices.push(index);
-              } else {
-                if (!filesByCategory[category]) {
-                  filesByCategory[category] = { files: [], indices: [] };
-                }
-                filesByCategory[category].files.push(file);
-                filesByCategory[category].indices.push(index);
-              }
-            });
-
-            const categoryOrder = ['英语学习', '小说'];
-            const sortedCategories = [
-              ...categoryOrder.filter((cat) => filesByCategory[cat]),
-              ...Object.keys(filesByCategory).filter((cat) => !categoryOrder.includes(cat)),
-            ];
-
-            return (
-              <div className="space-y-6">
-                {sortedCategories.map((category) => {
-                  const { files: categoryFiles, indices: categoryIndices } = filesByCategory[category];
-                  return (
-                    <div key={category} className="space-y-3">
-                      <h2 className="border-b border-gray-200 pb-2 text-lg font-semibold text-gray-800">
-                        {category}
-                        <span className="ml-2 text-sm font-normal text-gray-500">({categoryFiles.length})</span>
-                      </h2>
-                      <div className="space-y-2">
-                        {categoryFiles.map((file: FileWithDisplayName, categoryIndex: number) => {
-                          const originalIndex = categoryIndices[categoryIndex];
-                          const isSelected = actualTrackIndex === originalIndex;
-                          const displayName = file.displayName || file.filename.replace('_merged_final.mp3', '');
-                          return (
-                            <div
-                              key={`${file.filename}-${originalIndex}`}
-                              ref={(el) => {
-                                trackItemRefs.current[originalIndex] = el;
-                              }}
-                              onClick={() => playTrack(originalIndex)}
-                              className={`flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-all duration-200 active:scale-[0.99] ${
-                                isSelected
-                                  ? 'border border-blue-300 bg-blue-50 shadow-sm shadow-blue-50'
-                                  : 'border border-gray-100 bg-white shadow-sm hover:border-gray-200 hover:bg-gray-50'
-                              }`}
-                            >
-                              <div
-                                className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
-                                  isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'
-                                }`}
-                              >
-                                {isSelected ? (
-                                  <Play className="h-5 w-5 fill-white" />
-                                ) : (
-                                  <PlayCircle className="h-5 w-5" />
-                                )}
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <h3
-                                  className={`truncate text-sm font-medium transition-colors ${
-                                    isSelected ? 'font-semibold text-blue-700' : 'text-gray-900'
-                                  }`}
-                                >
-                                  {displayName}
-                                </h3>
-                                <p
-                                  className={`mt-0.5 text-xs transition-colors ${
-                                    isSelected ? 'text-blue-600' : 'text-gray-500'
-                                  }`}
-                                >
-                                  {(file.size / 1024 / 1024).toFixed(1)} MB • {new Date(file.date).toLocaleDateString()}
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {uncategorized.files.length > 0 && (
-                  <div className="space-y-3">
-                    <h2 className="border-b border-gray-200 pb-2 text-lg font-semibold text-gray-800">
-                      未分类
-                      <span className="ml-2 text-sm font-normal text-gray-500">({uncategorized.files.length})</span>
-                    </h2>
-                    <div className="space-y-2">
-                      {uncategorized.files.map((file: FileWithDisplayName, categoryIndex: number) => {
-                        const originalIndex = uncategorized.indices[categoryIndex];
-                        const isSelected = actualTrackIndex === originalIndex;
-                        const displayName = file.displayName || file.filename.replace('_merged_final.mp3', '');
-                        return (
-                          <div
-                            key={`${file.filename}-${originalIndex}`}
-                            ref={(el) => {
-                              trackItemRefs.current[originalIndex] = el;
-                            }}
-                            onClick={() => playTrack(originalIndex)}
-                            className={`flex cursor-pointer items-center gap-3 rounded-xl p-3 transition-all duration-200 active:scale-[0.99] ${
-                              isSelected
-                                ? 'border border-blue-300 bg-blue-50 shadow-sm shadow-blue-50'
-                                : 'border border-gray-100 bg-white shadow-sm hover:border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            <div
-                              className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
-                                isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'
-                              }`}
-                            >
-                              {isSelected ? (
-                                <Play className="h-5 w-5 fill-white" />
-                              ) : (
-                                <PlayCircle className="h-5 w-5" />
-                              )}
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <h3
-                                className={`truncate text-sm font-medium transition-colors ${
-                                  isSelected ? 'font-semibold text-blue-700' : 'text-gray-900'
-                                }`}
-                              >
-                                {displayName}
-                              </h3>
-                              <p
-                                className={`mt-0.5 text-xs transition-colors ${
-                                  isSelected ? 'text-blue-600' : 'text-gray-500'
-                                }`}
-                              >
-                                {(file.size / 1024 / 1024).toFixed(1)} MB • {new Date(file.date).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+            {otherEntries.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="border-b border-[var(--border)] pb-2 text-lg font-semibold text-[var(--text)]">
+                  其他内容
+                  <span className="ml-2 text-sm font-normal text-[var(--text-muted)]">({otherEntries.length})</span>
+                </h2>
+                <div className="space-y-2">
+                  {otherEntries.map(({ file, index }) => renderTrackCard(file, index))}
+                </div>
               </div>
-            );
-          })()}
+            )}
+          </div>
+        )}
       </main>
+
+      {!isLoading && files.length > 0 && (
+        <div
+          className="fixed inset-x-0 z-[100000] pointer-events-none"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}
+        >
+          <div className="mx-auto max-w-3xl px-3 sm:px-4">
+            <div className="pointer-events-auto grid grid-cols-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-card)]/95 backdrop-blur-xl p-1.5 shadow-xl shadow-black/20">
+              <button
+                type="button"
+                onClick={() => setActiveTab('english')}
+                className={`inline-flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold rounded-xl transition ${
+                  activeTab === 'english'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                <Languages className="h-4 w-4" />
+                英语学习
+                <span className="text-xs opacity-80">({englishEntries.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('novel')}
+                className={`inline-flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold rounded-xl transition ${
+                  activeTab === 'novel'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                <BookOpen className="h-4 w-4" />
+                小说
+                <span className="text-xs opacity-80">({novelEntries.length})</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -574,7 +592,7 @@ export default function Home() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 text-gray-500">Loading…</div>
+        <div className="flex min-h-screen items-center justify-center bg-[var(--surface-muted)] text-[var(--text-muted)]">Loading…</div>
       }
     >
       <HomeInner />

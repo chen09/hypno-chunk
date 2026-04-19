@@ -109,28 +109,23 @@ export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDispla
     startTransition(() => setCurrentSubtitle(active || null));
   }, [currentTime, subtitles]);
 
-  // Always render a fixed-height container to prevent layout shift
   return (
     <div className="px-4 py-6 min-h-[120px] flex items-center justify-center">
       <div className="text-center max-w-2xl w-full">
         {!srtPath ? (
-          <div className="text-gray-300 text-sm">
-            {/* Empty space when no subtitle file */}
-          </div>
+          <div className="text-[var(--text-muted)] text-sm invisible" />
         ) : loading ? (
-          <div className="text-gray-400 text-sm">
+          <div className="text-[var(--text-muted)] text-sm animate-pulse">
             Loading subtitles...
           </div>
         ) : error ? (
-          <div className="text-red-400 text-sm">
+          <div className="text-red-500 dark:text-red-400 text-sm">
             Subtitle error: {error}
           </div>
         ) : !currentSubtitle ? (
-          <div className="text-gray-300 text-sm">
-            {/* Empty space when no active subtitle */}
-          </div>
+          <div className="text-[var(--text-muted)] text-sm invisible" />
         ) : (
-          <p className="text-base sm:text-lg md:text-xl text-gray-800 leading-relaxed">
+          <p className="text-base sm:text-lg md:text-xl text-[var(--text)] leading-relaxed">
             {currentSubtitle.text}
           </p>
         )}

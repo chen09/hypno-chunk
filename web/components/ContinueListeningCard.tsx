@@ -50,27 +50,35 @@ export default function ContinueListeningCard({
     duration && duration > 0 ? Math.max(0, duration - summary.position) : undefined;
 
   return (
-    <div className="mb-4 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
-          <Headphones className="h-6 w-6" />
+    <div className="mb-5 rounded-2xl p-4 sm:p-5
+      bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50
+      dark:from-sky-950/50 dark:via-blue-950/40 dark:to-indigo-950/30
+      ring-1 ring-blue-200/60 dark:ring-blue-600/20
+      shadow-md shadow-blue-100/60 dark:shadow-blue-900/20">
+      <div className="flex items-start gap-3 sm:gap-4">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl
+          bg-gradient-to-br from-sky-500 to-blue-600 text-white
+          shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50">
+          <Headphones className="h-7 w-7" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-blue-700">Continue listening</p>
-          <h2 className="mt-0.5 truncate text-base font-semibold text-gray-900">{summary.title}</h2>
-          <p className="mt-0.5 text-xs text-gray-500">
+          <p className="text-xs font-semibold uppercase tracking-widest text-blue-600 dark:text-blue-400">
+            Continue listening
+          </p>
+          <h2 className="mt-0.5 truncate text-base font-semibold text-[var(--text)]">{summary.title}</h2>
+          <p className="mt-0.5 text-xs text-[var(--text-muted)]">
             {formatRelativeTime(summary.updatedAt)}
             {remaining !== undefined && (
               <>
                 {' · '}
-                <span className="font-medium text-gray-700">{formatClock(remaining)} left</span>
+                <span className="font-medium text-[var(--text)]">{formatClock(remaining)} left</span>
               </>
             )}
           </p>
           {duration !== undefined && (
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-blue-100">
+            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-blue-100 dark:bg-blue-900/40">
               <div
-                className="h-full rounded-full bg-blue-600 transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -79,7 +87,12 @@ export default function ContinueListeningCard({
         <button
           type="button"
           onClick={onSmartResume}
-          className="flex shrink-0 items-center gap-1 rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 active:scale-[0.98]"
+          className="flex shrink-0 items-center gap-1.5 rounded-full
+            bg-gradient-to-r from-sky-500 to-blue-600
+            hover:from-sky-400 hover:to-blue-500
+            px-4 py-2.5 text-sm font-semibold text-white
+            shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40
+            active:scale-[0.97] transition-all duration-150"
         >
           <Play className="h-4 w-4 fill-white" />
           Resume

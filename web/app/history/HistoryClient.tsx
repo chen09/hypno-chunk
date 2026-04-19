@@ -109,21 +109,21 @@ export default function HistoryClient() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur">
+    <div className="min-h-screen bg-[var(--surface-muted)]">
+      <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--player-bg)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center gap-2 px-3 py-3 sm:px-4">
           <Link
             href="/"
-            className="flex items-center gap-1 rounded-lg p-2 text-gray-600 hover:bg-gray-100"
+            className="flex items-center gap-1 rounded-full p-2 text-[var(--text-muted)] hover:bg-[var(--brand-muted)] hover:text-[var(--brand)] transition-colors"
             aria-label="Back to library"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h1 className="flex-1 text-lg font-semibold text-gray-900">Playback history</h1>
+          <h1 className="flex-1 text-lg font-semibold text-[var(--text)]">Playback history</h1>
           <button
             type="button"
             onClick={() => void exportJson()}
-            className="rounded-lg p-2 text-gray-600 hover:bg-gray-100"
+            className="rounded-full p-2 text-[var(--text-muted)] hover:bg-[var(--brand-muted)] hover:text-[var(--brand)] transition-colors"
             title="Export JSON"
             aria-label="Export JSON"
           >
@@ -132,7 +132,7 @@ export default function HistoryClient() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-lg p-2 text-gray-600 hover:bg-gray-100"
+            className="rounded-full p-2 text-[var(--text-muted)] hover:bg-[var(--brand-muted)] hover:text-[var(--brand)] transition-colors"
             title="Import JSON"
             aria-label="Import JSON"
           >
@@ -141,7 +141,7 @@ export default function HistoryClient() {
           <button
             type="button"
             onClick={() => void clearAll()}
-            className="rounded-lg p-2 text-red-600 hover:bg-red-50"
+            className="rounded-full p-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
             title="Clear all"
             aria-label="Clear all history"
           >
@@ -150,13 +150,13 @@ export default function HistoryClient() {
         </div>
         <div className="mx-auto max-w-3xl px-3 pb-3 sm:px-4">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by title or filename…"
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none ring-blue-200 focus:ring-2"
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-card)] text-[var(--text)] placeholder:text-[var(--text-muted)] py-2.5 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-all"
             />
           </div>
         </div>
@@ -165,10 +165,10 @@ export default function HistoryClient() {
 
       <main className="mx-auto max-w-3xl space-y-2 px-3 py-4 sm:px-4">
         {loading && (
-          <p className="py-8 text-center text-sm text-gray-500 animate-pulse">Loading history…</p>
+          <p className="py-8 text-center text-sm text-[var(--text-muted)] animate-pulse">Loading history…</p>
         )}
         {!loading && filtered.length === 0 && (
-          <p className="py-8 text-center text-sm text-gray-500">
+          <p className="py-8 text-center text-sm text-[var(--text-muted)]">
             {items.length === 0 ? 'No playback history yet.' : 'No matches.'}
           </p>
         )}

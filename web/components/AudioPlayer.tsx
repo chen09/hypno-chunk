@@ -401,77 +401,81 @@ export default function CustomAudioPlayer({
   if (!mounted) return null;
 
   return (
-    <div 
-      id="audio-player-container"
-      className="fixed top-0 left-0 right-0 bg-white border-b border-blue-200 shadow-md z-[99999]"
-      style={{ position: 'fixed', top: 0, left: 0, right: 0, backgroundColor: '#ffffff' }}
-    >
-      
-      {/* Custom Header for Title and Close Button */}
-      <div className="flex items-center justify-between px-3 sm:px-4 pt-2 sm:pt-3 pb-2 gap-2">
+    <div id="audio-player-container" className="fixed top-0 left-0 right-0 z-[99999]">
+      {/* Track info header */}
+      <div className="flex items-center justify-between px-3 sm:px-4 pt-2.5 sm:pt-3 pb-1.5 gap-2">
         <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-blue-900 text-xs sm:text-sm truncate">
-                {currentTrack ? (currentTrack.displayName || currentTrack.filename) : "Ready to Play"}
-            </h3>
+          <h3 className="font-semibold text-[var(--text)] text-xs sm:text-sm truncate leading-tight">
+            {currentTrack ? (currentTrack.displayName || currentTrack.filename) : 'Ready to Play'}
+          </h3>
+          {currentTrack?.category && (
+            <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-[var(--brand-muted)] text-[var(--brand)]">
+              {currentTrack.category}
+            </span>
+          )}
         </div>
         <div className="flex items-center shrink-0 gap-0.5">
           <Link
             href="/history"
-            className="p-2 text-gray-500 hover:text-blue-700 rounded-lg hover:bg-blue-50"
+            className="p-2 rounded-full text-[var(--text-muted)] hover:bg-[var(--brand-muted)] hover:text-[var(--brand)] transition-colors"
             aria-label="Playback history"
             title="History"
           >
             <History className="w-4 h-4 sm:w-5 sm:h-5" />
           </Link>
           {onClose && (
-            <button type="button" onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-full text-[var(--text-muted)] hover:bg-[var(--border)] hover:text-[var(--text)] transition-colors"
+            >
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
         </div>
       </div>
 
-      {/* The Player Component */}
+      {/* Player */}
       <div className="px-1 sm:px-2 pb-2 sm:pb-3">
         {currentTrack ? (
           <>
             <ReactH5AudioPlayer
-                ref={playerRef}
-                autoPlay={false}
-                src={currentTrack.path}
-                onEnded={onTrackEnded || (hasNext ? onNext : undefined)}
-                onClickPrevious={hasPrevious ? onPrev : undefined}
-                onClickNext={hasNext ? onNext : undefined}
-                showSkipControls={true}
-                showJumpControls={true}
-                layout="stacked-reverse" 
-                customAdditionalControls={[
-                  <button
-                    key="play-mode"
-                    onClick={() => {
-                      if (!onPlayModeChange) return;
-                      const modes: PlayMode[] = ['normal', 'repeat-all', 'repeat-one', 'shuffle'];
-                      const currentIndex = modes.indexOf(playMode);
-                      const nextIndex = (currentIndex + 1) % modes.length;
-                      onPlayModeChange(modes[nextIndex]);
-                    }}
-                    className="rhap_button-clear rhap_repeat-button"
-                    aria-label="Play mode"
-                    title={`Play mode: ${playMode}`}
-                  >
-                    {playMode === 'repeat-all' && <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />}
-                    {playMode === 'repeat-one' && <Repeat1 className="w-4 h-4 sm:w-5 sm:h-5" />}
-                    {playMode === 'shuffle' && <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />}
-                    {playMode === 'normal' && <Repeat className="w-4 h-4 sm:w-5 sm:h-5 opacity-30" />}
-                  </button>
-                ]}
-                customVolumeControls={[]} 
-                showFilledVolume={false}
+              ref={playerRef}
+              autoPlay={false}
+              src={currentTrack.path}
+              onEnded={onTrackEnded || (hasNext ? onNext : undefined)}
+              onClickPrevious={hasPrevious ? onPrev : undefined}
+              onClickNext={hasNext ? onNext : undefined}
+              showSkipControls={true}
+              showJumpControls={true}
+              layout="stacked-reverse"
+              customAdditionalControls={[
+                <button
+                  key="play-mode"
+                  onClick={() => {
+                    if (!onPlayModeChange) return;
+                    const modes: PlayMode[] = ['normal', 'repeat-all', 'repeat-one', 'shuffle'];
+                    const currentIndex = modes.indexOf(playMode);
+                    const nextIndex = (currentIndex + 1) % modes.length;
+                    onPlayModeChange(modes[nextIndex]);
+                  }}
+                  className="rhap_button-clear rhap_repeat-button"
+                  aria-label="Play mode"
+                  title={`Play mode: ${playMode}`}
+                >
+                  {playMode === 'repeat-all' && <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />}
+                  {playMode === 'repeat-one' && <Repeat1 className="w-4 h-4 sm:w-5 sm:h-5" />}
+                  {playMode === 'shuffle' && <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />}
+                  {playMode === 'normal' && <Repeat className="w-4 h-4 sm:w-5 sm:h-5 opacity-30" />}
+                </button>,
+              ]}
+              customVolumeControls={[]}
+              showFilledVolume={false}
             />
           </>
         ) : (
-          <div className="p-4 text-center text-gray-400 text-sm">
-              Select a track to start playing...
+          <div className="p-4 text-center text-[var(--text-muted)] text-sm">
+            Select a track to start playing...
           </div>
         )}
       </div>

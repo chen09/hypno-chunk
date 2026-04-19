@@ -55,28 +55,31 @@ export default function HistoryListItem({
           onOpen();
         }
       }}
-      className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-100 bg-white p-3 shadow-sm outline-none ring-blue-200 focus-visible:ring-2"
+      className="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-card)] p-3 shadow-sm outline-none ring-blue-500 focus-visible:ring-2 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150"
     >
       <div className="min-w-0 flex-1 text-left">
-        <p className="truncate text-sm font-medium text-gray-900">{displayTitle}</p>
-        <p className="mt-0.5 text-xs text-gray-500">
+        <p className="truncate text-sm font-medium text-[var(--text)]">{displayTitle}</p>
+        <p className="mt-0.5 text-xs text-[var(--text-muted)]">
           {formatRelativeTime(item.updatedAt)}
           {item.category && (
             <>
               {' · '}
-              <span className="text-gray-600">{item.category}</span>
+              <span className="text-[var(--text-muted)]">{item.category}</span>
             </>
           )}
           {remaining !== undefined && (
             <>
               {' · '}
-              <span className="font-medium text-gray-700">{formatClock(remaining)} left</span>
+              <span className="font-medium text-[var(--text)]">{formatClock(remaining)} left</span>
             </>
           )}
         </p>
         {duration !== undefined && (
-          <div className="mt-2 h-1 w-full max-w-xs overflow-hidden rounded-full bg-gray-100">
-            <div className="h-full rounded-full bg-blue-600" style={{ width: `${pct}%` }} />
+          <div className="mt-2 h-1 w-full max-w-xs overflow-hidden rounded-full bg-[var(--border)]">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600"
+              style={{ width: `${pct}%` }}
+            />
           </div>
         )}
       </div>
@@ -86,7 +89,7 @@ export default function HistoryListItem({
           e.stopPropagation();
           onRemove();
         }}
-        className="shrink-0 rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600"
+        className="shrink-0 rounded-full p-2 text-[var(--text-muted)] hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-600 dark:hover:text-red-400 transition-colors"
         aria-label="Remove from history"
       >
         <Trash2 className="h-4 w-4" />

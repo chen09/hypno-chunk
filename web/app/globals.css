@@ -2,8 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Design tokens ─────────────────────────────── */
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --surface:        #ffffff;
+  --surface-muted:  #f8fafc;
+  --surface-card:   #ffffff;
+
+  /* Borders */
+  --border:         #e5e7eb;
+
+  /* Text */
+  --text:           #0f172a;
+  --text-muted:     #64748b;
+
+  /* Player glass */
+  --player-bg:     rgba(255, 255, 255, 0.94);
+  --player-border: rgba(229, 231, 235, 0.9);
+
+  /* Brand */
+  --brand:       #2563eb;
+  --brand-muted: rgba(37, 99, 235, 0.10);
+  --brand-glow:  rgba(37, 99, 235, 0.28);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface:        #0b1220;
+    --surface-muted:  #0d1525;
+    --surface-card:   #111b30;
+    --border:         #1e2d4a;
+    --text:           #e2e8f0;
+    --text-muted:     #94a3b8;
+    --player-bg:     rgba(13, 21, 37, 0.93);
+    --player-border: rgba(30, 45, 74, 0.9);
+    --brand:       #3b82f6;
+    --brand-muted: rgba(59, 130, 246, 0.15);
+    --brand-glow:  rgba(59, 130, 246, 0.35);
+  }
+}
+
+/* ─── Base ───────────────────────────────────────── */
 html, body {
-  overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile to feel more app-like */
+  overscroll-behavior-y: none;
+  background-color: var(--surface-muted);
+  color: var(--text);
 }
 
 /* Safe area for iPhone X+ */
@@ -11,31 +56,58 @@ html, body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Ensure audio player container is fixed at top */
+/* ─── Equalizer animation (playing indicator) ────── */
+@keyframes eq-bar {
+  0%, 100% { transform: scaleY(0.35); }
+  50%       { transform: scaleY(1); }
+}
+
+.eq-bar {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: eq-bar 0.9s ease-in-out infinite;
+}
+.eq-bar:nth-child(2) { animation-delay: 0.18s; }
+.eq-bar:nth-child(3) { animation-delay: 0.36s; }
+
+/* ─── Player container ───────────────────────────── */
 #audio-player-container {
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
   z-index: 99999 !important;
+  background-color: var(--player-bg) !important;
+  backdrop-filter: blur(20px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.5) !important;
+  border-bottom: 1px solid var(--player-border) !important;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06) !important;
 }
 
-/* Ensure subtitle container is fixed below player */
+/* ─── Subtitle container ─────────────────────────── */
 #subtitle-container {
   position: fixed !important;
   left: 0 !important;
   right: 0 !important;
   z-index: 99998 !important;
-  background-color: #ffffff !important;
+  background-color: var(--player-bg) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid var(--player-border) !important;
 }
 
-/* Ensure react-h5-audio-player is visible */
+/* ─── react-h5-audio-player ──────────────────────── */
 .rhap_container {
   display: flex !important;
   visibility: visible !important;
   opacity: 1 !important;
   background-color: transparent !important;
   box-shadow: none !important;
+  padding: 0 !important;
 }
 
 .rhap_main-controls {
@@ -46,71 +118,96 @@ html, body {
 .rhap_play-pause-button {
   display: flex !important;
   visibility: visible !important;
+  color: var(--brand) !important;
+  font-size: 32px !important;
+  filter: drop-shadow(0 0 6px var(--brand-glow)) !important;
+  transition: filter 0.2s ease, transform 0.15s ease !important;
 }
 
-/* Customize player colors */
-.rhap_main-controls-button {
-  color: #2563eb !important; /* blue-600 */
-}
-
-.rhap_play-pause-button {
-  color: #2563eb !important; /* blue-600 */
-  font-size: 32px !important; /* Mobile */
+.rhap_play-pause-button:hover {
+  filter: drop-shadow(0 0 10px var(--brand-glow)) !important;
+  transform: scale(1.07) !important;
 }
 
 @media (min-width: 640px) {
   .rhap_play-pause-button {
-    font-size: 40px !important; /* Tablet and desktop */
+    font-size: 40px !important;
   }
 }
 
+/* Progress bar */
+.rhap_progress-bar {
+  height: 5px !important;
+  border-radius: 3px !important;
+  background-color: var(--border) !important;
+}
+
 .rhap_progress-filled {
-  background-color: #2563eb !important; /* blue-600 */
+  border-radius: 3px !important;
+  background: linear-gradient(90deg, #38bdf8, var(--brand)) !important;
 }
 
 .rhap_progress-indicator {
-  background-color: #2563eb !important; /* blue-600 */
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.4) !important;
+  background-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px var(--brand-glow), 0 2px 4px rgba(0, 0, 0, 0.15) !important;
 }
 
+/* Time */
 .rhap_time {
-  color: #6b7280 !important; /* gray-500 */
-  font-size: 11px !important; /* Mobile */
+  color: var(--text-muted) !important;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums !important;
 }
 
 @media (min-width: 640px) {
   .rhap_time {
-    font-size: 12px !important; /* Tablet and desktop */
+    font-size: 12px !important;
   }
 }
 
+/* Main controls */
+.rhap_main-controls-button {
+  color: var(--brand) !important;
+}
+
+/* Skip buttons */
 .rhap_skip-button {
-  color: #6b7280 !important; /* gray-500 */
-  transition: opacity 0.2s ease, color 0.2s ease;
+  color: var(--text-muted) !important;
+  transition: opacity 0.2s ease, color 0.2s ease !important;
 }
 
 .rhap_skip-button:hover {
-  color: #2563eb !important; /* blue-600 */
+  color: var(--brand) !important;
 }
 
-/* Disabled state for skip buttons */
 .rhap_skip-button[data-disabled="true"] {
-  color: #9ca3af !important; /* gray-400 - lighter gray when disabled */
+  color: var(--border) !important;
   cursor: not-allowed !important;
+  pointer-events: none !important;
 }
 
 .rhap_skip-button[data-disabled="true"]:hover {
-  color: #9ca3af !important; /* Keep gray on hover when disabled */
+  color: var(--border) !important;
 }
 
-/* Play mode button styling */
+/* Jump buttons */
+.rhap_jump-button {
+  color: var(--text-muted) !important;
+  transition: color 0.2s ease !important;
+}
+
+.rhap_jump-button:hover {
+  color: var(--brand) !important;
+}
+
+/* Play mode button */
 .rhap_repeat-button {
-  color: #6b7280 !important; /* gray-500 */
-  transition: color 0.2s ease;
+  color: var(--text-muted) !important;
+  transition: color 0.2s ease !important;
 }
 
 .rhap_repeat-button:hover {
-  color: #2563eb !important; /* blue-600 */
+  color: var(--brand) !important;
 }
 
 .rhap_repeat-button svg {
@@ -123,14 +220,4 @@ html, body {
     width: 20px !important;
     height: 20px !important;
   }
-}
-
-/* Jump buttons (fast forward/rewind) styling */
-.rhap_jump-button {
-  color: #6b7280 !important; /* gray-500 */
-  transition: color 0.2s ease;
-}
-
-.rhap_jump-button:hover {
-  color: #2563eb !important; /* blue-600 */
 }

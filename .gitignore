@@ -35,3 +35,6 @@ venv/
 env/
 ENV/
 .venv/
+
+# Autopilot runtime artifacts
+pipeline/checkpoints/

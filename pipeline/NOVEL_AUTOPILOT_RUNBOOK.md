@@ -37,3 +37,21 @@ python pipeline/run_novel_autopilot.py \
   --force
 ```
 
+## Troubleshooting from production run
+
+- **Subtitle stage fails repeatedly**
+  - Symptom: "Subtitle file not found for video ID ..."
+  - Action: continue direct-audio fallback path (default), do not block publishing.
+
+- **Deploy fails with container name conflict**
+  - Symptom: `The container name "/hypnochunk-web" is already in use ...`
+  - Recovery:
+
+```bash
+ssh ubuntu@133.125.45.147 \
+  "docker rm -f hypnochunk-web || true && cd ~/hypnochunk && ./deploy.sh"
+```
+
+- **Safe resume after partial success**
+  - Rerun the same command; checkpoint will skip completed stages (`download_done` ... `upload_done`) and continue.
+

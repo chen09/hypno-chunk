@@ -13,6 +13,7 @@ This file preserves high-signal project context so future agents can work safely
 - `README.md` for project structure and workflow.
 - `DEPLOYMENT.md` for production deployment details.
 - `docker-compose.yml` for runtime security and logging constraints.
+- `NOVEL_AUTOPILOT_HANDOFF.md` for end-to-end novel ingestion handoff prompt/template.
 
 ## Production Context (Critical)
 
@@ -52,3 +53,15 @@ These files map generated output tracks to source input videos (YouTube URLs / I
 
 - There is a known stream-handling fix area in `web/app/api/audio/[...path]/route.ts` related to Node stream/Web stream compatibility.
 - If audio streaming errors reappear, prioritize checking this route and validating production health checks.
+
+## Novel Autopilot Lessons (2026-04)
+
+- A full end-to-end novel publish for `https://www.youtube.com/watch?v=3eRcox-QkKM` succeeded with checkpointed one-command automation (`pipeline/run_novel_autopilot.py`).
+- For long novel uploads, direct-audio chunking fallback is a reliable publish path when subtitle/transcription is flaky or slow.
+- Keep checkpoint-driven recovery as standard flow; stage resume avoided re-downloading/re-uploading after deploy failures.
+- Real deploy blocker observed: container name conflict (`/hypnochunk-web`) can break `./deploy.sh` retries.
+  - Practical recovery command:
+    - `ssh ubuntu@133.125.45.147 "docker rm -f hypnochunk-web || true && cd ~/hypnochunk && ./deploy.sh"`
+- Verification gate should remain strict:
+  - Homepage responds (`https://hypnochunk.com`)
+  - `/api/files` contains all expected new chunk filenames.

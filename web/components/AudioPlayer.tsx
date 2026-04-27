@@ -401,9 +401,9 @@ export default function CustomAudioPlayer({
   if (!mounted) return null;
 
   return (
-    <div id="audio-player-container" className="fixed top-0 left-0 right-0 z-[99999]">
+    <div id="audio-player-container" className="relative w-full">
       {/* Track info header */}
-      <div className="flex items-center justify-between px-3 sm:px-4 pt-2.5 sm:pt-3 pb-1.5 gap-2">
+      <div className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-2.5 sm:px-4 sm:pt-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-[var(--text)] text-xs sm:text-sm truncate leading-tight">
             {currentTrack ? (currentTrack.displayName || currentTrack.filename) : 'Ready to Play'}
@@ -436,7 +436,7 @@ export default function CustomAudioPlayer({
       </div>
 
       {/* Player */}
-      <div className="px-1 sm:px-2 pb-2 sm:pb-3">
+      <div className="px-1 pb-2 sm:px-2 sm:pb-3">
         {currentTrack ? (
           <>
             <ReactH5AudioPlayer

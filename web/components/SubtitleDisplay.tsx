@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useState, useEffect } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 interface SubtitleEntry {
   id: number;
@@ -12,7 +12,11 @@ interface SubtitleEntry {
 interface SubtitleDisplayProps {
   srtPath: string | null;
   currentTime: number; // in seconds
+  trackCategory?: string;
 }
+
+type SubtitleMode = 'single' | 'auto' | 'multi';
+type SubtitlePosition = 'high' | 'middle' | 'low';
 
 // Parse SRT file content
 function parseSRT(content: string): SubtitleEntry[] {
@@ -51,11 +55,36 @@ function parseSRT(content: string): SubtitleEntry[] {
   return entries;
 }
 
-export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDisplayProps) {
+export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }: SubtitleDisplayProps) {
   const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
-  const [currentSubtitle, setCurrentSubtitle] = useState<SubtitleEntry | null>(null);
+  const [currentSubtitleIndex, setCurrentSubtitleIndex] = useState<number>(-1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<SubtitleMode>(() => {
+    if (typeof window === 'undefined') return 'auto';
+    const savedMode = window.localStorage.getItem('hypnochunk.subtitle.mode') as SubtitleMode | null;
+    return savedMode === 'single' || savedMode === 'auto' || savedMode === 'multi'
+      ? savedMode
+      : 'auto';
+  });
+  const [position, setPosition] = useState<SubtitlePosition>(() => {
+    if (typeof window === 'undefined') return 'middle';
+    const savedPosition = window.localStorage.getItem(
+      'hypnochunk.subtitle.position',
+    ) as SubtitlePosition | null;
+    return savedPosition === 'high' || savedPosition === 'middle' || savedPosition === 'low'
+      ? savedPosition
+      : 'middle';
+  });
+  const lineRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    window.localStorage.setItem('hypnochunk.subtitle.mode', mode);
+  }, [mode]);
+
+  useEffect(() => {
+    window.localStorage.setItem('hypnochunk.subtitle.position', position);
+  }, [position]);
 
   // Load and parse SRT file
   useEffect(() => {
@@ -63,7 +92,7 @@ export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDispla
       // Reset state when srtPath is cleared
       startTransition(() => {
         setSubtitles([]);
-        setCurrentSubtitle(null);
+        setCurrentSubtitleIndex(-1);
       });
       return;
     }
@@ -95,41 +124,155 @@ export default function SubtitleDisplay({ srtPath, currentTime }: SubtitleDispla
       });
   }, [srtPath]);
 
-  // Find current subtitle based on currentTime
+  // Find current subtitle index based on currentTime
   useEffect(() => {
     if (subtitles.length === 0) {
-      startTransition(() => setCurrentSubtitle(null));
+      startTransition(() => setCurrentSubtitleIndex(-1));
       return;
     }
 
-    const active = subtitles.find(
+    const activeIndex = subtitles.findIndex(
       (sub) => currentTime >= sub.startTime && currentTime < sub.endTime
     );
 
-    startTransition(() => setCurrentSubtitle(active || null));
+    startTransition(() => setCurrentSubtitleIndex(activeIndex));
   }, [currentTime, subtitles]);
 
+  const currentSubtitle = currentSubtitleIndex >= 0 ? subtitles[currentSubtitleIndex] : null;
+
+  const effectiveMode = useMemo<Exclude<SubtitleMode, 'auto'>>(() => {
+    if (mode !== 'auto') return mode;
+    const category = trackCategory?.trim() || '';
+    if (category.includes('新闻')) return 'multi';
+    if (!currentSubtitle) return 'single';
+    if (currentSubtitle.text.length >= 34) return 'multi';
+
+    const denseCount = subtitles.filter(
+      (sub) => sub.startTime >= currentTime && sub.startTime < currentTime + 8,
+    ).length;
+    if (denseCount >= 4) return 'multi';
+
+    const sample = subtitles.slice(0, Math.min(20, subtitles.length));
+    const avgLength =
+      sample.length > 0
+        ? sample.reduce((acc, sub) => acc + sub.text.length, 0) / sample.length
+        : 0;
+    return avgLength >= 24 ? 'multi' : 'single';
+  }, [mode, trackCategory, currentSubtitle, subtitles, currentTime]);
+
+  useEffect(() => {
+    if (effectiveMode !== 'multi' || currentSubtitleIndex < 0) return;
+    const lineEl = lineRefs.current[currentSubtitleIndex];
+    if (!lineEl) return;
+    lineEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [effectiveMode, currentSubtitleIndex]);
+
+  const positionOffset = position === 'high' ? -10 : position === 'low' ? 10 : 0;
+
   return (
-    <div className="px-4 py-6 min-h-[120px] flex items-center justify-center">
-      <div className="text-center max-w-2xl w-full">
+    <div className="w-full border-t border-[var(--player-border)] bg-[var(--surface-card)] px-2 pb-2 pt-1.5">
+      <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
+        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-0.5">
+          {(['single', 'auto', 'multi'] as SubtitleMode[]).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setMode(item)}
+              className={`rounded-md px-2 py-1 text-[10px] font-semibold transition ${
+                mode === item
+                  ? 'bg-[var(--surface-card)] text-[#007aff] shadow-sm'
+                  : 'text-[var(--text-muted)]'
+              }`}
+            >
+              {item === 'single' ? '单行' : item === 'multi' ? '多行' : '自动'}
+            </button>
+          ))}
+        </div>
+        <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-0.5">
+          {([
+            ['high', '高'],
+            ['middle', '中'],
+            ['low', '低'],
+          ] as Array<[SubtitlePosition, string]>).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setPosition(value)}
+              className={`rounded-md px-2 py-1 text-[10px] font-semibold transition ${
+                position === value
+                  ? 'bg-[var(--surface-card)] text-[#007aff] shadow-sm'
+                  : 'text-[var(--text-muted)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="w-full text-center" style={{ transform: `translateY(${positionOffset}px)` }}>
         {!srtPath ? (
           <div className="text-[var(--text-muted)] text-sm invisible" />
         ) : loading ? (
-          <div className="text-[var(--text-muted)] text-sm animate-pulse">
+          <div className="py-2 text-sm text-[var(--text-muted)] animate-pulse">
             Loading subtitles...
           </div>
         ) : error ? (
-          <div className="text-red-500 dark:text-red-400 text-sm">
+          <div className="py-2 text-sm text-red-500 dark:text-red-400">
             Subtitle error: {error}
           </div>
-        ) : !currentSubtitle ? (
+        ) : effectiveMode === 'single' ? (
+          !currentSubtitle ? (
+            <div className="text-[var(--text-muted)] text-sm invisible" />
+          ) : (
+            <div className="w-full border-y border-white/30 bg-black px-3 py-2.5 shadow-[0_10px_20px_rgba(0,0,0,0.55)]">
+              <p
+                className="mx-auto max-w-[500px] text-center text-[16px] font-extrabold leading-relaxed tracking-[0.01em] sm:text-[17px]"
+                style={{
+                  color: '#ffffff',
+                  opacity: 1,
+                  textShadow: '0 1px 2px rgba(0,0,0,1), 0 0 1px rgba(255,255,255,0.18)',
+                  overflowWrap: 'anywhere',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {currentSubtitle.text}
+              </p>
+            </div>
+          )
+        ) : subtitles.length === 0 ? (
           <div className="text-[var(--text-muted)] text-sm invisible" />
         ) : (
-          <p className="text-base sm:text-lg md:text-xl text-[var(--text)] leading-relaxed">
-            {currentSubtitle.text}
-          </p>
+          <div className="h-[120px] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-left">
+            <div className="space-y-1.5">
+              {subtitles.map((sub, idx) => {
+                const isActive = idx === currentSubtitleIndex;
+                return (
+                  <div
+                    key={`${sub.id}-${sub.startTime}`}
+                    ref={(el) => {
+                      lineRefs.current[idx] = el;
+                    }}
+                    className={`rounded-lg px-2 py-1.5 text-sm leading-relaxed transition ${
+                      isActive
+                        ? 'bg-black text-white shadow-md shadow-black/30'
+                        : 'text-[var(--text-muted)] opacity-80'
+                    }`}
+                  >
+                    {sub.text}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
+
+      {mode === 'auto' && (
+        <p className="mt-1 px-1 text-left text-[10px] text-[var(--text-muted)]">
+          自动模式当前为：{effectiveMode === 'multi' ? '多行滚动' : '单行聚焦'}
+        </p>
+      )}
     </div>
   );
 }

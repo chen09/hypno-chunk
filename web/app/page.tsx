@@ -43,8 +43,8 @@ function HomeInner() {
 
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(null);
   const [initialPosition, setInitialPosition] = useState(0);
-  const [playerHeight, setPlayerHeight] = useState(180);
-  const [subtitleHeight, setSubtitleHeight] = useState(120);
+  const [topStackHeight, setTopStackHeight] = useState(260);
+  const [tabBarHeight, setTabBarHeight] = useState(92);
   const [currentTime, setCurrentTime] = useState(0);
   const [playMode, setPlayMode] = useState<PlayMode>('normal');
   const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
@@ -318,12 +318,12 @@ function HomeInner() {
   usePlaybackProgress(audioEl, playbackTrackMeta);
 
   useEffect(() => {
-    const playerContainer = document.getElementById('audio-player-container');
-    if (!playerContainer) return;
+    const topStack = document.getElementById('top-fixed-stack');
+    if (!topStack) return;
 
     const updateHeight = () => {
-      const height = playerContainer.offsetHeight;
-      setPlayerHeight(height);
+      const height = topStack.offsetHeight;
+      setTopStackHeight(height);
     };
 
     updateHeight();
@@ -331,31 +331,7 @@ function HomeInner() {
     const resizeObserver = new ResizeObserver(() => {
       updateHeight();
     });
-    resizeObserver.observe(playerContainer);
-    window.addEventListener('resize', updateHeight);
-
-    return () => {
-      timers.forEach((timer) => clearTimeout(timer));
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateHeight);
-    };
-  }, [currentTrack]);
-
-  useEffect(() => {
-    const subtitleContainer = document.getElementById('subtitle-container');
-    if (!subtitleContainer) return;
-
-    const updateHeight = () => {
-      const height = subtitleContainer.offsetHeight;
-      setSubtitleHeight(height + 20);
-    };
-
-    updateHeight();
-    const timers = [setTimeout(updateHeight, 50), setTimeout(updateHeight, 200), setTimeout(updateHeight, 500)];
-    const resizeObserver = new ResizeObserver(() => {
-      updateHeight();
-    });
-    resizeObserver.observe(subtitleContainer);
+    resizeObserver.observe(topStack);
     window.addEventListener('resize', updateHeight);
 
     return () => {
@@ -364,6 +340,29 @@ function HomeInner() {
       window.removeEventListener('resize', updateHeight);
     };
   }, [currentTrack, srtPath]);
+
+  useEffect(() => {
+    const tabBar = document.getElementById('bottom-tab-bar');
+    if (!tabBar) return;
+
+    const updateHeight = () => {
+      setTabBarHeight(tabBar.offsetHeight + 16);
+    };
+
+    updateHeight();
+    const timers = [setTimeout(updateHeight, 50), setTimeout(updateHeight, 200), setTimeout(updateHeight, 500)];
+    const resizeObserver = new ResizeObserver(() => {
+      updateHeight();
+    });
+    resizeObserver.observe(tabBar);
+    window.addEventListener('resize', updateHeight);
+
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [files.length, activeTab]);
 
   useEffect(() => {
     if (actualTrackIndex !== null && trackItemRefs.current[actualTrackIndex]) {
@@ -471,34 +470,45 @@ function HomeInner() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--surface-muted)]">
-      <AudioPlayer
-        currentTrack={currentTrack}
-        onNext={handleNext}
-        onPrev={handlePrev}
-        onTimeUpdate={setCurrentTime}
-        initialPosition={initialPosition}
-        onAudioReady={handleAudioReady}
-        hasPrevious={hasPrevious}
-        hasNext={hasNext}
-        playMode={playMode}
-        onPlayModeChange={setPlayMode}
-        onTrackEnded={handleTrackEnded}
-      />
-
+    <div className="min-h-dvh bg-[var(--surface-muted)]">
       <div
-        id="subtitle-container"
-        className="fixed left-0 right-0 z-[99998]"
-        style={{ top: `${playerHeight}px` }}
+        className="fixed inset-x-0 top-0 z-[99998] pointer-events-none border-b border-[var(--player-border)] bg-[var(--surface-card)]"
+        style={{ height: `${topStackHeight}px` }}
+      />
+      <div
+        id="top-fixed-stack"
+        className="fixed left-1/2 top-0 z-[99999] w-full max-w-[520px] -translate-x-1/2 px-2 sm:px-3"
       >
-        <div className="mx-auto max-w-3xl">
-          <SubtitleDisplay srtPath={srtPath} currentTime={currentTime} />
+        <div className="overflow-hidden rounded-b-3xl border border-[var(--player-border)] bg-[var(--surface-card)] shadow-lg shadow-black/15">
+          <AudioPlayer
+            currentTrack={currentTrack}
+            onNext={handleNext}
+            onPrev={handlePrev}
+            onTimeUpdate={setCurrentTime}
+            initialPosition={initialPosition}
+            onAudioReady={handleAudioReady}
+            hasPrevious={hasPrevious}
+            hasNext={hasNext}
+            playMode={playMode}
+            onPlayModeChange={setPlayMode}
+            onTrackEnded={handleTrackEnded}
+          />
+          <div
+            id="subtitle-container"
+            className="bg-[var(--surface-card)]"
+          >
+            <SubtitleDisplay
+              srtPath={srtPath}
+              currentTime={currentTime}
+              trackCategory={currentTrack?.category}
+            />
+          </div>
         </div>
       </div>
 
       <main
-        className="mx-auto max-w-3xl px-3 py-4 sm:px-4 sm:py-6 md:px-6"
-        style={{ paddingTop: `${playerHeight + subtitleHeight + 10}px`, paddingBottom: '132px' }}
+        className="mx-auto w-full max-w-[520px] px-3 py-4 sm:px-4 sm:py-5"
+        style={{ paddingTop: `${topStackHeight + 12}px`, paddingBottom: `${tabBarHeight}px` }}
       >
         {isLoading && (
           <div className="flex animate-pulse justify-center py-10 text-[var(--text-muted)]">Loading library...</div>
@@ -517,7 +527,7 @@ function HomeInner() {
         {!isLoading && files.length > 0 && <ContinueListeningCard summary={continueMeta} onSmartResume={onSmartResume} />}
 
         {!isLoading && files.length > 0 && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div className="space-y-3">
               <h2 className="border-b border-[var(--border)] pb-2 text-lg font-semibold text-[var(--text)]">
                 {activeTab === 'english' ? '英语学习' : '小说'}
@@ -549,39 +559,41 @@ function HomeInner() {
 
       {!isLoading && files.length > 0 && (
         <div
-          className="fixed inset-x-0 z-[100000] pointer-events-none"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}
+          id="bottom-tab-bar"
+          className="fixed z-[100000] grid grid-cols-2 rounded-[18px] border border-black/5 bg-white/95 p-0.5 shadow-md shadow-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-[#111b30ee]"
+          style={{
+            left: '50%',
+            width: 'min(496px, calc(100vw - 24px))',
+            transform: 'translateX(-50%)',
+            bottom: 'calc(env(safe-area-inset-bottom) + 6px)',
+          }}
         >
-          <div className="mx-auto max-w-3xl px-3 sm:px-4">
-            <div className="pointer-events-auto grid grid-cols-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-card)]/95 backdrop-blur-xl p-1.5 shadow-xl shadow-black/20">
-              <button
-                type="button"
-                onClick={() => setActiveTab('english')}
-                className={`inline-flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold rounded-xl transition ${
-                  activeTab === 'english'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-                }`}
-              >
-                <Languages className="h-4 w-4" />
-                英语学习
-                <span className="text-xs opacity-80">({englishEntries.length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('novel')}
-                className={`inline-flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold rounded-xl transition ${
-                  activeTab === 'novel'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-                }`}
-              >
-                <BookOpen className="h-4 w-4" />
-                小说
-                <span className="text-xs opacity-80">({novelEntries.length})</span>
-              </button>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('english')}
+            className={`inline-flex flex-col items-center justify-center gap-0.5 rounded-2xl px-3 py-2 text-[10px] font-normal tracking-[0.01em] transition-colors duration-200 ${
+              activeTab === 'english'
+                ? 'text-[#007aff]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+            aria-label="学英语"
+          >
+            <Languages className={`h-[18px] w-[18px] ${activeTab === 'english' ? 'stroke-[2.15]' : 'stroke-[1.9]'}`} />
+            <span className="leading-none">学英语</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('novel')}
+            className={`inline-flex flex-col items-center justify-center gap-0.5 rounded-2xl px-3 py-2 text-[10px] font-normal tracking-[0.01em] transition-colors duration-200 ${
+              activeTab === 'novel'
+                ? 'text-[#007aff]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+            aria-label="小说"
+          >
+            <BookOpen className={`h-[18px] w-[18px] ${activeTab === 'novel' ? 'stroke-[2.15]' : 'stroke-[1.9]'}`} />
+            <span className="leading-none">小说</span>
+          </button>
         </div>
       )}
     </div>

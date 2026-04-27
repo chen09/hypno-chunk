@@ -17,6 +17,78 @@ from src.translator import JSONTranslator
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+NEWS_TEMPLATE_PRIORITY = {
+    "full news pass": 0,
+    "vocabulary": 10,
+    "short sentence": 20,
+    "common sentence pattern": 30,
+    "news functional sentence": 40,
+    "long sentence split": 50,
+}
+
+def _normalize_text(value: str) -> str:
+    return (value or "").strip().lower()
+
+def reorder_modules_for_news_template(json_path: str) -> str:
+    """
+    Ensure news-learning modules follow the expected teaching flow:
+    Full News Pass -> Vocabulary -> Short Sentence -> Pattern -> Functional -> Long Split
+    """
+    path = Path(json_path)
+    if not path.exists():
+        return json_path
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.warning(f"Skip news template reorder: failed to read JSON ({e})")
+        return json_path
+
+    modules = data.get("modules", [])
+    if not isinstance(modules, list) or not modules:
+        return json_path
+
+    normalized_types = [_normalize_text(str(m.get("type", ""))) for m in modules if isinstance(m, dict)]
+    is_news_template = any(
+        ("news functional sentence" in t)
+        or ("long sentence split" in t)
+        or ("full news pass" in t)
+        for t in normalized_types
+    )
+    if not is_news_template:
+        return json_path
+
+    def module_priority(module: dict, idx: int) -> tuple[int, int]:
+        module_type = _normalize_text(str(module.get("type", "")))
+        module_name = _normalize_text(str(module.get("module", "")))
+        combined = f"{module_type} {module_name}"
+
+        for key, priority in NEWS_TEMPLATE_PRIORITY.items():
+            if key in combined:
+                return (priority, idx)
+
+        # Keep unknown/custom modules after the known news template layers.
+        return (100, idx)
+
+    sorted_modules = [
+        module
+        for _, module in sorted(
+            ((module_priority(m, i), m) for i, m in enumerate(modules) if isinstance(m, dict)),
+            key=lambda x: x[0],
+        )
+    ]
+
+    if sorted_modules == modules:
+        return json_path
+
+    data["modules"] = sorted_modules
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+    logger.info(f"Applied news template module ordering to {path.name}")
+    return json_path
+
 def merge_json_parts(input_arg: str, format_type: str = None) -> str:
     """
     Smartly detect if the input is a video ID or a file path.
@@ -154,6 +226,9 @@ async def process_generation(input_arg: str, rate_cn: str = None, rate_en_slow: 
     else:
         logger.warning("Skipping translation check: OPENAI_API_KEY or BASE_URL not set.")
         processed_json_path = json_path
+
+    # 1.5 Apply deterministic teaching order for news template modules
+    processed_json_path = reorder_modules_for_news_template(processed_json_path)
 
     # 2. Generate Audio
     logger.info(f"=== Step 3.2: Generating Audio from {processed_json_path} ===")

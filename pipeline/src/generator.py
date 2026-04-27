@@ -11,6 +11,13 @@ from pydub import AudioSegment
 # Configure Logger
 logger = logging.getLogger(__name__)
 
+FULL_NEWS_PASS_KEYS = (
+    "full news pass",
+    "full news",
+    "news full pass",
+    "news intro pass",
+)
+
 class AudioGenerator:
     """
     Wrapper for edge-tts and pydub to generate sleep learning audio files.
@@ -149,6 +156,9 @@ class AudioGenerator:
         for index, module in enumerate(modules):
             module_idx = index + 1
             phrase = module.get("module", "")
+            module_type = str(module.get("type", "") or "")
+            module_type_normalized = module_type.strip().lower()
+            is_full_news_pass = any(key in module_type_normalized for key in FULL_NEWS_PASS_KEYS)
             safe_phrase = "".join(c for c in phrase if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
             module_filename_base = f"{module_idx:03d}-{safe_phrase}"
             module_audio_path = modules_dir / f"{module_filename_base}.mp3"
@@ -246,7 +256,9 @@ class AudioGenerator:
                     await add_module_segment(meaning, self.chinese_voice, "+0%")
                     await add_module_segment("", "", "", is_p=True, p_dur=2000) # Long pause
 
-                # 3-5. Examples: EN Slow -> CN Translation -> EN Fast
+                # 3-5. Examples:
+                # Default: EN Slow -> CN Translation -> EN Fast
+                # Full News Pass: EN Normal -> CN Translation -> EN Slow Review
                 for i, ex in enumerate(examples):
                     en_text = ""
                     cn_text = ""
@@ -260,18 +272,25 @@ class AudioGenerator:
                         continue
                         
                     if en_text:
-                        # 1. English Slow (先听慢速英文，建立语音印象)
-                        await add_module_segment(en_text, self.voice, self.rate_en_slow)
-                        await add_module_segment("", "", "", is_p=True, p_dur=500)
-
-                        # 2. Chinese Translation (再听中文翻译，确认理解)
-                        if cn_text:
-                            await add_module_segment(cn_text, self.chinese_voice, self.rate_cn)
+                        if is_full_news_pass:
+                            # News full pass flow requested by product:
+                            # EN Normal -> CN Translation -> EN Slow Review
+                            await add_module_segment(en_text, self.voice, "+0%")
                             await add_module_segment("", "", "", is_p=True, p_dur=500)
-                        
-                        # 3. English Fast (最后听快速英文，熟悉正常语速)
-                        await add_module_segment(en_text, self.voice, self.rate_en_fast)
-                        
+                            if cn_text:
+                                await add_module_segment(cn_text, self.chinese_voice, self.rate_cn)
+                                await add_module_segment("", "", "", is_p=True, p_dur=500)
+                            await add_module_segment(en_text, self.voice, self.rate_en_slow)
+                        else:
+                            # Default learning flow:
+                            # EN Slow -> CN Translation -> EN Fast
+                            await add_module_segment(en_text, self.voice, self.rate_en_slow)
+                            await add_module_segment("", "", "", is_p=True, p_dur=500)
+                            if cn_text:
+                                await add_module_segment(cn_text, self.chinese_voice, self.rate_cn)
+                                await add_module_segment("", "", "", is_p=True, p_dur=500)
+                            await add_module_segment(en_text, self.voice, self.rate_en_fast)
+
                         if i < len(examples) - 1:
                             await add_module_segment("", "", "", is_p=True, p_dur=2000)
                         else:

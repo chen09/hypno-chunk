@@ -105,6 +105,87 @@ The filename should be the same as the source file but with a `.json` extension.
 
 ---
 
+## 📰 类型 3：新闻英语模式模板（全文先行 + 词句讲解）
+
+适用于：新闻讲解类英语视频（如“通过新闻学英语”），目标是先建立整篇理解，再进入词汇与句型讲解。
+
+### 设计原则（必须遵守）
+
+1. **整篇新闻导入层（最高优先级）**
+   - 先给新闻全文（按语义段切片）并遵循固定顺序：
+     - Pass 1: EN normal（先读一遍全文）
+     - Pass 2: CN translation（再给整篇中文）
+     - Pass 3: EN slow review（最后慢读一遍）
+2. **词汇层（主）**
+   - 抽高频新闻词汇/短语（可复用、可迁移）
+   - 每词 1-2 个原句 + 中文翻译
+3. **短句层（主）**
+   - 选择可独立复述的短句（建议 6-14 词）
+   - 保持一句英文一句中文交替，不做大段并读
+4. **常用句型层（主）**
+   - 提取高复用模板句型（如 `It depends on...` / `The point is that...` / `What I mean is...`）
+5. **新闻功能句层（主）**
+   - 覆盖新闻常见功能：因果、对比、转折、数据表达、被动句
+6. **长句拆分层（辅）**
+   - 仅保留信息密度高的新闻原句
+   - 强制按意群/从句拆分：`英文子句A -> 中文A -> 英文子句B -> 中文B`
+   - 禁止“5-6句连读后再整段翻译”
+
+### 📋 Prompt 模板：
+
+```text
+You are an expert English curriculum designer and bilingual ESL teacher.
+Your task is to convert the provided transcript into a practical news-English learning dataset.
+Return strictly valid JSON only.
+
+Learning goals:
+1) Full news pass layer FIRST (EN normal -> CN translation -> EN slow)
+2) Vocabulary/Phrase layer (primary)
+3) Short sentence layer (primary)
+4) Common sentence pattern layer (primary)
+5) News functional sentence layer (primary)
+6) Long sentence split layer (secondary)
+
+Output requirements:
+- Keep only useful, high-frequency, reusable items.
+- Chinese translations must be natural and concise.
+- Deduplicate near-identical items.
+- For long items, split by clause/meaning group and pair EN/CN step by step.
+- Do NOT output multi-sentence paragraph blocks with one combined translation.
+- For the full news pass layer, split the article into semantic chunks and put it BEFORE all other layers.
+- Full news pass chunks should use `type: "Full News Pass"` and concise module labels like:
+  - `Full News • Pass 1 (EN Normal)`
+  - `Full News • Pass 2 (CN Translation)`
+  - `Full News • Pass 3 (EN Slow Review)`
+
+Use this JSON structure:
+{
+  "modules": [
+    {
+      "module": "item title",
+      "type": "Full News Pass | Vocabulary | Short Sentence | Common Sentence Pattern | News Functional Sentence | Long Sentence Split",
+      "chinese_meaning": "concise Chinese meaning or learning focus",
+      "examples": [
+        {"en": "English segment or sentence", "cn": "Chinese translation"},
+        {"en": "English segment or sentence", "cn": "Chinese translation"}
+      ]
+    }
+  ]
+}
+
+Type-specific hints:
+- Full News Pass: place these modules first; each chunk should preserve article coherence.
+- Vocabulary: include term-level meaning and short contextual examples.
+- Short Sentence: prefer 6-14 word independently repeatable lines.
+- Common Sentence Pattern: include reusable template with one practical variation.
+- News Functional Sentence: include items for cause/effect, contrast, transition, data, passive voice.
+- Long Sentence Split: split one long sentence into EN/CN clause pairs.
+
+If no useful items are found, return {"modules": []}.
+```
+
+---
+
 ## ✅ JSON 格式说明
 
 ### 完整格式（语义模块）：

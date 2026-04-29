@@ -58,6 +58,7 @@ function parseSRT(content: string): SubtitleEntry[] {
 export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }: SubtitleDisplayProps) {
   const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
   const [currentSubtitleIndex, setCurrentSubtitleIndex] = useState<number>(-1);
+  const [lastActiveSubtitleIndex, setLastActiveSubtitleIndex] = useState<number>(-1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<SubtitleMode>(() => {
@@ -93,6 +94,7 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
       startTransition(() => {
         setSubtitles([]);
         setCurrentSubtitleIndex(-1);
+        setLastActiveSubtitleIndex(-1);
       });
       return;
     }
@@ -114,6 +116,8 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
       .then((content) => {
         const parsed = content ? parseSRT(content) : [];
         setSubtitles(parsed);
+        setCurrentSubtitleIndex(-1);
+        setLastActiveSubtitleIndex(-1);
         setError(null);
         setLoading(false);
       })
@@ -135,7 +139,12 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
       (sub) => currentTime >= sub.startTime && currentTime < sub.endTime
     );
 
-    startTransition(() => setCurrentSubtitleIndex(activeIndex));
+    startTransition(() => {
+      setCurrentSubtitleIndex(activeIndex);
+      if (activeIndex >= 0) {
+        setLastActiveSubtitleIndex(activeIndex);
+      }
+    });
   }, [currentTime, subtitles]);
 
   const currentSubtitle = currentSubtitleIndex >= 0 ? subtitles[currentSubtitleIndex] : null;
@@ -144,12 +153,22 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
     if (mode !== 'auto') return mode;
     const category = trackCategory?.trim() || '';
     if (category.includes('新闻')) return 'multi';
-    if (!currentSubtitle) return 'single';
-    if (currentSubtitle.text.length >= 34) return 'multi';
 
-    const denseCount = subtitles.filter(
-      (sub) => sub.startTime >= currentTime && sub.startTime < currentTime + 8,
-    ).length;
+    if (subtitles.length === 0) return 'single';
+
+    const denseCount = subtitles.filter((sub, idx) => {
+      if (currentSubtitleIndex >= 0) {
+        const pivot = subtitles[currentSubtitleIndex];
+        const windowStart = pivot.startTime - 4;
+        const windowEnd = pivot.startTime + 8;
+        return sub.startTime >= windowStart && sub.startTime <= windowEnd;
+      }
+      const anchor = lastActiveSubtitleIndex >= 0 ? subtitles[lastActiveSubtitleIndex] : null;
+      if (!anchor) return idx < 4;
+      const windowStart = anchor.startTime - 4;
+      const windowEnd = anchor.startTime + 8;
+      return sub.startTime >= windowStart && sub.startTime <= windowEnd;
+    }).length;
     if (denseCount >= 4) return 'multi';
 
     const sample = subtitles.slice(0, Math.min(20, subtitles.length));
@@ -158,16 +177,26 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
         ? sample.reduce((acc, sub) => acc + sub.text.length, 0) / sample.length
         : 0;
     return avgLength >= 24 ? 'multi' : 'single';
-  }, [mode, trackCategory, currentSubtitle, subtitles, currentTime]);
+  }, [mode, trackCategory, subtitles, currentSubtitleIndex, lastActiveSubtitleIndex]);
+
+  const multiScrollAnchorIndex = useMemo(() => {
+    if (currentSubtitleIndex >= 0) return currentSubtitleIndex;
+    if (lastActiveSubtitleIndex >= 0) return lastActiveSubtitleIndex;
+    return subtitles.length > 0 ? 0 : -1;
+  }, [currentSubtitleIndex, lastActiveSubtitleIndex, subtitles.length]);
 
   useEffect(() => {
-    if (effectiveMode !== 'multi' || currentSubtitleIndex < 0) return;
-    const lineEl = lineRefs.current[currentSubtitleIndex];
+    if (effectiveMode !== 'multi' || subtitles.length === 0 || multiScrollAnchorIndex < 0) return;
+    const lineEl = lineRefs.current[multiScrollAnchorIndex];
     if (!lineEl) return;
     lineEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [effectiveMode, currentSubtitleIndex]);
+  }, [effectiveMode, multiScrollAnchorIndex, subtitles.length]);
 
   const positionOffset = position === 'high' ? -10 : position === 'low' ? 10 : 0;
+  const singlePanelClass =
+    'w-full min-h-[54px] max-w-full overflow-hidden border-y border-white/30 bg-black px-3 py-2.5 shadow-[0_10px_20px_rgba(0,0,0,0.55)]';
+  const multiPanelClass =
+    'h-[120px] max-w-full overflow-x-hidden overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-left';
 
   return (
     <div className="w-full border-t border-[var(--player-border)] bg-[var(--surface-card)] px-2 pb-2 pt-1.5">
@@ -212,18 +241,22 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
 
       <div className="w-full text-center" style={{ transform: `translateY(${positionOffset}px)` }}>
         {!srtPath ? (
-          <div className="text-[var(--text-muted)] text-sm invisible" />
+          <div className={effectiveMode === 'multi' ? multiPanelClass : singlePanelClass}>
+            <div className="opacity-0 select-none text-sm" aria-hidden="true">
+              subtitle spacer
+            </div>
+          </div>
         ) : loading ? (
-          <div className="py-2 text-sm text-[var(--text-muted)] animate-pulse">
-            Loading subtitles...
+          <div className={effectiveMode === 'multi' ? multiPanelClass : singlePanelClass}>
+            <div className="py-2 text-sm text-[var(--text-muted)] animate-pulse">Loading subtitles...</div>
           </div>
         ) : error ? (
-          <div className="py-2 text-sm text-red-500 dark:text-red-400">
-            Subtitle error: {error}
+          <div className={effectiveMode === 'multi' ? multiPanelClass : singlePanelClass}>
+            <div className="py-2 text-sm text-red-500 dark:text-red-400">Subtitle error: {error}</div>
           </div>
         ) : effectiveMode === 'single' ? (
           !currentSubtitle ? (
-            <div className="w-full border-y border-white/15 bg-black/85 px-3 py-2.5 shadow-[0_8px_16px_rgba(0,0,0,0.4)]">
+            <div className={singlePanelClass}>
               <p
                 className="mx-auto max-w-[500px] text-center text-[16px] font-semibold leading-relaxed sm:text-[17px] opacity-0 select-none"
                 aria-hidden="true"
@@ -232,7 +265,7 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
               </p>
             </div>
           ) : (
-            <div className="w-full max-w-full overflow-hidden border-y border-white/30 bg-black px-3 py-2.5 shadow-[0_10px_20px_rgba(0,0,0,0.55)]">
+            <div className={singlePanelClass}>
               <p
                 className="mx-auto max-w-[500px] text-center text-[16px] font-extrabold leading-relaxed tracking-[0.01em] break-words [overflow-wrap:anywhere] sm:text-[17px]"
                 style={{
@@ -246,9 +279,13 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
             </div>
           )
         ) : subtitles.length === 0 ? (
-          <div className="text-[var(--text-muted)] text-sm invisible" />
+          <div className={multiPanelClass}>
+            <div className="opacity-0 select-none text-sm" aria-hidden="true">
+              subtitle spacer
+            </div>
+          </div>
         ) : (
-          <div className="h-[120px] max-w-full overflow-x-hidden overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-left">
+          <div className={multiPanelClass}>
             <div className="space-y-1.5">
               {subtitles.map((sub, idx) => {
                 const isActive = idx === currentSubtitleIndex;

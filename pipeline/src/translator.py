@@ -121,8 +121,16 @@ class JSONTranslator:
 
         try:
             # Use the model from env or default to a cheap fast one. 
-            # User environment seems to have deepseek/gemini.
-            model_name = "moonshot-v1-8k" # Explicitly use Moonshot as per env
+            # Prefer explicit model; otherwise infer from base_url compatibility.
+            model_name = os.getenv("OPENAI_MODEL", "").strip()
+            base_url = str(getattr(self.client, "base_url", "")).lower()
+            if not model_name:
+                if "deepseek" in base_url:
+                    model_name = "deepseek-v4-flash"
+                elif "moonshot" in base_url:
+                    model_name = "moonshot-v1-8k"
+                else:
+                    model_name = "gpt-4o-mini"
             
             response = await self.client.chat.completions.create(
                 model=model_name,

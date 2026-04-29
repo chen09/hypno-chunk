@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import random
+import hashlib
 from pathlib import Path
 from io import BytesIO
 
@@ -23,6 +24,16 @@ SCENE_DIALOGUE_KEYS = (
     "drama scene",
     "tv scene",
 )
+
+
+def build_safe_module_filename(module_idx: int, phrase: str, max_phrase_len: int = 96) -> str:
+    base_phrase = (phrase or "module").strip()
+    safe_phrase = "".join(c for c in base_phrase if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
+    safe_phrase = safe_phrase or "module"
+    if len(safe_phrase) > max_phrase_len:
+        digest = hashlib.sha1(safe_phrase.encode("utf-8")).hexdigest()[:10]
+        safe_phrase = f"{safe_phrase[:max_phrase_len]}_{digest}"
+    return f"{module_idx:03d}-{safe_phrase}"
 
 def build_full_news_pass_chunks(examples: list) -> list[dict]:
     """
@@ -267,8 +278,7 @@ class AudioGenerator:
             module_type_normalized = module_type.strip().lower()
             is_full_news_pass = any(key in module_type_normalized for key in FULL_NEWS_PASS_KEYS)
             is_scene_dialogue = any(key in module_type_normalized for key in SCENE_DIALOGUE_KEYS)
-            safe_phrase = "".join(c for c in phrase if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
-            module_filename_base = f"{module_idx:03d}-{safe_phrase}"
+            module_filename_base = build_safe_module_filename(module_idx, phrase)
             module_audio_path = modules_dir / f"{module_filename_base}.mp3"
             module_json_path = modules_dir / f"{module_filename_base}.json"
 

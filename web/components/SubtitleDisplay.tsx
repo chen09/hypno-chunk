@@ -63,7 +63,7 @@ function parseSRT(content: string): SubtitleEntry[] {
 
 /**
  * Splits `text` into whitespace-delimited tokens and wraps the token at
- * `activeWordIdx` (index into `cueWords`) with a high-contrast color block.
+ * `activeWordIdx` (index into `cueWords`) with a clearer outline box.
  * Falls back to plain text when no word data is available.
  */
 function renderWithWordBox(text: string, cueWords: WordEntry[], activeWordIdx: number) {
@@ -74,7 +74,7 @@ function renderWithWordBox(text: string, cueWords: WordEntry[], activeWordIdx: n
       {tokens.map((token, i) => (
         <span key={i}>
           {i === activeWordIdx ? (
-            <span className="rounded bg-[#ffd84d] px-1 text-black shadow-[0_0_0_1px_rgba(255,216,77,0.55),0_1px_6px_rgba(255,216,77,0.45)]">
+            <span className="rounded px-0.5 ring-2 ring-[#ffd84d] ring-offset-0 shadow-[0_0_0_1px_rgba(255,216,77,0.25)]">
               {token}
             </span>
           ) : (

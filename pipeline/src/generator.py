@@ -17,6 +17,113 @@ FULL_NEWS_PASS_KEYS = (
     "news full pass",
     "news intro pass",
 )
+SCENE_DIALOGUE_KEYS = (
+    "scene dialogue block",
+    "scene context",
+    "drama scene",
+    "tv scene",
+)
+
+def build_full_news_pass_chunks(examples: list) -> list[dict]:
+    """
+    Merge sentence-level examples into coherent paragraph/dialogue chunks.
+    This improves continuity for news and scene-based learning content.
+    """
+    chunks: list[dict] = []
+    en_buffer: list[str] = []
+    cn_buffer: list[str] = []
+    buffer_char_len = 0
+
+    def flush_chunk():
+        nonlocal en_buffer, cn_buffer, buffer_char_len
+        if not en_buffer:
+            return
+        chunks.append({
+            "en": " ".join(en_buffer).strip(),
+            "cn": " ".join(cn_buffer).strip(),
+        })
+        en_buffer = []
+        cn_buffer = []
+        buffer_char_len = 0
+
+    for item in examples:
+        en_text = ""
+        cn_text = ""
+        if isinstance(item, str):
+            en_text = item.strip()
+        elif isinstance(item, dict):
+            en_text = str(item.get("en", "")).strip()
+            cn_text = str(item.get("cn", "")).strip()
+
+        if not en_text:
+            continue
+
+        en_buffer.append(en_text)
+        if cn_text:
+            cn_buffer.append(cn_text)
+        buffer_char_len += len(en_text)
+
+        ends_sentence = en_text.endswith((".", "!", "?", "。", "！", "？", ":", "："))
+        should_flush = (
+            len(en_buffer) >= 3
+            or buffer_char_len >= 220
+            or (len(en_buffer) >= 2 and ends_sentence)
+        )
+        if should_flush:
+            flush_chunk()
+
+    flush_chunk()
+    return chunks
+
+def build_scene_dialogue_chunks(examples: list) -> list[dict]:
+    """
+    Merge scene dialogue lines into coherent mini-dialogues.
+    Prefer shorter chunks than news so the conversational rhythm is preserved.
+    """
+    chunks: list[dict] = []
+    en_buffer: list[str] = []
+    cn_buffer: list[str] = []
+    buffer_char_len = 0
+
+    def flush_chunk():
+        nonlocal en_buffer, cn_buffer, buffer_char_len
+        if not en_buffer:
+            return
+        chunks.append({
+            "en": " ".join(en_buffer).strip(),
+            "cn": " ".join(cn_buffer).strip(),
+        })
+        en_buffer = []
+        cn_buffer = []
+        buffer_char_len = 0
+
+    for item in examples:
+        en_text = ""
+        cn_text = ""
+        if isinstance(item, str):
+            en_text = item.strip()
+        elif isinstance(item, dict):
+            en_text = str(item.get("en", "")).strip()
+            cn_text = str(item.get("cn", "")).strip()
+
+        if not en_text:
+            continue
+
+        en_buffer.append(en_text)
+        if cn_text:
+            cn_buffer.append(cn_text)
+        buffer_char_len += len(en_text)
+
+        should_flush = (
+            len(en_buffer) >= 4
+            or buffer_char_len >= 170
+            or (len(en_buffer) >= 2 and en_text.endswith(("?", "!", "？", "！")))
+        )
+        if should_flush:
+            flush_chunk()
+
+    flush_chunk()
+    return chunks
 
 class AudioGenerator:
     """
@@ -159,6 +266,7 @@ class AudioGenerator:
             module_type = str(module.get("type", "") or "")
             module_type_normalized = module_type.strip().lower()
             is_full_news_pass = any(key in module_type_normalized for key in FULL_NEWS_PASS_KEYS)
+            is_scene_dialogue = any(key in module_type_normalized for key in SCENE_DIALOGUE_KEYS)
             safe_phrase = "".join(c for c in phrase if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
             module_filename_base = f"{module_idx:03d}-{safe_phrase}"
             module_audio_path = modules_dir / f"{module_filename_base}.mp3"
@@ -259,46 +367,64 @@ class AudioGenerator:
                 # 3-5. Examples:
                 # Default: EN Slow -> CN Translation -> EN Fast
                 # Full News Pass: EN Normal -> CN Translation -> EN Slow Review
-                for i, ex in enumerate(examples):
+                if is_full_news_pass:
+                    learning_units = build_full_news_pass_chunks(examples)
+                elif is_scene_dialogue:
+                    learning_units = build_scene_dialogue_chunks(examples)
+                else:
+                    learning_units = examples
+                total_units = len(learning_units)
+
+                for i, unit in enumerate(learning_units):
                     en_text = ""
                     cn_text = ""
-                    
-                    if isinstance(ex, str):
-                        en_text = ex
-                    elif isinstance(ex, dict):
-                        en_text = ex.get("en", "")
-                        cn_text = ex.get("cn", "")
+
+                    if isinstance(unit, str):
+                        en_text = unit
+                    elif isinstance(unit, dict):
+                        en_text = str(unit.get("en", "")).strip()
+                        cn_text = str(unit.get("cn", "")).strip()
                     else:
                         continue
-                        
-                    if en_text:
-                        if is_full_news_pass:
-                            # News full pass flow requested by product:
-                            # EN Normal -> CN Translation -> EN Slow Review
-                            await add_module_segment(en_text, self.voice, "+0%")
-                            await add_module_segment("", "", "", is_p=True, p_dur=500)
-                            if cn_text:
-                                await add_module_segment(cn_text, self.chinese_voice, self.rate_cn)
-                                await add_module_segment("", "", "", is_p=True, p_dur=500)
-                            await add_module_segment(en_text, self.voice, self.rate_en_slow)
-                        else:
-                            # Default learning flow:
-                            # EN Slow -> CN Translation -> EN Fast
-                            await add_module_segment(en_text, self.voice, self.rate_en_slow)
-                            await add_module_segment("", "", "", is_p=True, p_dur=500)
-                            if cn_text:
-                                await add_module_segment(cn_text, self.chinese_voice, self.rate_cn)
-                                await add_module_segment("", "", "", is_p=True, p_dur=500)
-                            await add_module_segment(en_text, self.voice, self.rate_en_fast)
 
-                        if i < len(examples) - 1:
-                            await add_module_segment("", "", "", is_p=True, p_dur=2000)
-                        else:
+                    if not en_text:
+                        continue
+
+                    if is_full_news_pass:
+                        # News full pass flow requested by product:
+                        # EN Normal -> CN Translation -> EN Slow Review
+                        await add_module_segment(en_text, self.voice, "+0%")
+                        await add_module_segment("", "", "", is_p=True, p_dur=500)
+                        if cn_text:
+                            await add_module_segment(cn_text, self.chinese_voice, self.rate_cn)
                             await add_module_segment("", "", "", is_p=True, p_dur=500)
-                    
-                    # Log progress every 10 examples or at the end
-                    if (i + 1) % 10 == 0 or (i + 1) == len(examples):
-                        logger.info(f"  Example progress: {i+1}/{len(examples)} examples processed")
+                        await add_module_segment(en_text, self.voice, self.rate_en_slow)
+                    elif is_scene_dialogue:
+                        # Scene dialogue flow:
+                        # EN normal (context) -> CN translation -> EN normal review
+                        await add_module_segment(en_text, self.voice, "+0%")
+                        await add_module_segment("", "", "", is_p=True, p_dur=500)
+                        if cn_text:
+                            await add_module_segment(cn_text, self.chinese_voice, self.rate_cn)
+                            await add_module_segment("", "", "", is_p=True, p_dur=500)
+                        await add_module_segment(en_text, self.voice, "+0%")
+                    else:
+                        # Default learning flow:
+                        # EN Slow -> CN Translation -> EN Fast
+                        await add_module_segment(en_text, self.voice, self.rate_en_slow)
+                        await add_module_segment("", "", "", is_p=True, p_dur=500)
+                        if cn_text:
+                            await add_module_segment(cn_text, self.chinese_voice, self.rate_cn)
+                            await add_module_segment("", "", "", is_p=True, p_dur=500)
+                        await add_module_segment(en_text, self.voice, self.rate_en_fast)
+
+                    if i < total_units - 1:
+                        await add_module_segment("", "", "", is_p=True, p_dur=2000)
+                    else:
+                        await add_module_segment("", "", "", is_p=True, p_dur=500)
+
+                    if (i + 1) % 10 == 0 or (i + 1) == total_units:
+                        logger.info(f"  Unit progress: {i+1}/{total_units} units processed")
                 
                 # 6. Module Name (EN) - only if exists (重复模块名)
                 if phrase:

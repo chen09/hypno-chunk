@@ -449,16 +449,16 @@ function HomeInner() {
           )}
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 max-w-full flex-1 overflow-hidden">
           <h3
-            className={`truncate text-sm font-medium transition-colors ${
+            className={`line-clamp-2-safe break-words text-sm font-medium leading-snug transition-colors [overflow-wrap:anywhere] ${
               isSelected ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-[var(--text)]'
             }`}
           >
             {displayName}
           </h3>
           <p
-            className={`mt-0.5 text-xs transition-colors ${
+            className={`mt-0.5 truncate text-xs transition-colors ${
               isSelected ? 'text-blue-500 dark:text-blue-400' : 'text-[var(--text-muted)]'
             }`}
           >

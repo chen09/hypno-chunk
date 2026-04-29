@@ -55,17 +55,19 @@ export default function ContinueListeningCard({
       dark:from-sky-950/50 dark:via-blue-950/40 dark:to-indigo-950/30
       ring-1 ring-blue-200/60 dark:ring-blue-600/20
       shadow-md shadow-blue-100/60 dark:shadow-blue-900/20">
-      <div className="flex items-start gap-3 sm:gap-4">
+      <div className="flex flex-wrap items-start gap-3 sm:gap-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl
           bg-gradient-to-br from-sky-500 to-blue-600 text-white
           shadow-lg shadow-blue-500/30 dark:shadow-blue-900/50">
           <Headphones className="h-7 w-7" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 max-w-full flex-1 basis-[220px]">
           <p className="text-xs font-semibold uppercase tracking-widest text-blue-600 dark:text-blue-400">
             Continue listening
           </p>
-          <h2 className="mt-0.5 truncate text-base font-semibold text-[var(--text)]">{summary.title}</h2>
+          <h2 className="line-clamp-2-safe mt-0.5 break-words text-base font-semibold text-[var(--text)] [overflow-wrap:anywhere]">
+            {summary.title}
+          </h2>
           <p className="mt-0.5 text-xs text-[var(--text-muted)]">
             {formatRelativeTime(summary.updatedAt)}
             {remaining !== undefined && (
@@ -87,10 +89,10 @@ export default function ContinueListeningCard({
         <button
           type="button"
           onClick={onSmartResume}
-          className="flex shrink-0 items-center gap-1.5 rounded-full
+          className="flex shrink-0 items-center justify-center gap-1.5 rounded-full
             bg-gradient-to-r from-sky-500 to-blue-600
             hover:from-sky-400 hover:to-blue-500
-            px-4 py-2.5 text-sm font-semibold text-white
+            px-4 py-2.5 text-sm font-semibold text-white min-w-[108px] sm:min-w-0
             shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40
             active:scale-[0.97] transition-all duration-150"
         >

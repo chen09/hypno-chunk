@@ -1,0 +1,30 @@
+==========================================
+重新生成所有 _merged.json 文件
+==========================================
+
+找到 9 个 _merged.json 文件：
+  - EWwMQ5Pi7lw_merged.json
+  - K4_wYlLjIbw_merged.json
+  - Y6aPrWYiDHw_merged.json
+  - ZljJjh7INSw_merged.json
+  - maClopFe1DI_merged.json
+  - ow8Zx7eiDvg_merged.json
+  - rj0z6Tb45Ps_merged.json
+  - ug5mCB8w_0A_merged.json
+  - w0cGyvDJrFQ_merged.json
+
+
+[1/9] 处理: EWwMQ5Pi7lw_merged
+----------------------------------------
+INFO:__main__:Using provided file directly: data/1_extracted_json/EWwMQ5Pi7lw_merged.json
+INFO:__main__:=== Step 3.1: Checking/Translating Examples ===
+INFO:src.translator:No examples need translation.
+INFO:__main__:=== Step 3.2: Generating Audio from data/1_extracted_json/EWwMQ5Pi7lw_merged.json ===
+INFO:src.generator:Speeds set to -> CN: +10%, EN Slow: -25%, EN Fast: +5%
+INFO:src.generator:Starting audio generation for 9 modules...
+INFO:src.generator:Processing module 1/9: come up with
+INFO:src.generator:Processing module 2/9: put up with
+INFO:src.generator:Processing module 3/9: break the ice
+INFO:src.generator:Processing module 4/9: bring up
+INFO:src.generator:Processing module 5/9: call off
+INFO:src.generator:Processing module 6/9: figure out

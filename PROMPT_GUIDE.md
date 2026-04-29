@@ -62,6 +62,10 @@ The filename should be the same as the source file but with a `.json` extension.
 
 适用于：学习日常惯用句、实用表达的视频。**不需要**提取语义模块，只需要英文句子和中文翻译。
 
+### 连贯性建议（推荐）
+- 不要只做“孤立单句”；优先保留有上下文的连续对话块。
+- 对连续场景（如美剧对话），建议每个块保留 2-6 句，保持问答与语气连贯。
+
 ### 📋 Prompt 模板：
 
 ```text
@@ -77,7 +81,8 @@ IMPORTANT:
 - If the text has multiple similar expressions, include them all.
 - Translate each sentence accurately into Chinese.
 - Deduplicate identical English lines: keep just one occurrence even if it appears multiple times.
-- When consecutive lines clearly form a dialogue pair (e.g., question → answer), keep them together inside the same `examples` array (don’t split them into separate objects).
+- When consecutive lines form a coherent dialogue/scene, keep them together in the SAME module `examples` block (2-6 lines preferred), not isolated single lines.
+- For dialogue-heavy content, prioritize continuity over quantity: one meaningful dialogue block is better than many fragmented one-liners.
 - Do not repeat the English text in `cn`; provide a proper Chinese translation instead of copying the English sentence.
 - For simple dialogues or single sentences that do not represent a semantic learning chunk, omit `module`, `type`, and `chinese_meaning`; just emit the `examples` list.
 - If a subtitle line contains romanized Chinese (pinyin), treat it as the Chinese part of the dialogue. Do not output the pinyin as an English sentence. Instead, keep the actual spoken English in `en` and provide the corresponding Chinese characters or a natural Chinese translation in `cn`. If only pinyin is available, translate it into meaningful Chinese for `cn` rather than leaving the romanization unchanged.
@@ -112,7 +117,7 @@ The filename should be the same as the source file but with a `.json` extension.
 ### 设计原则（必须遵守）
 
 1. **整篇新闻导入层（最高优先级）**
-   - 先给新闻全文（按语义段切片）并遵循固定顺序：
+   - 先给新闻全文（按语义段切片；建议每段 2-4 句）并遵循固定顺序：
      - Pass 1: EN normal（先读一遍全文）
      - Pass 2: CN translation（再给整篇中文）
      - Pass 3: EN slow review（最后慢读一遍）
@@ -180,6 +185,61 @@ Type-specific hints:
 - Common Sentence Pattern: include reusable template with one practical variation.
 - News Functional Sentence: include items for cause/effect, contrast, transition, data, passive voice.
 - Long Sentence Split: split one long sentence into EN/CN clause pairs.
+
+If no useful items are found, return {"modules": []}.
+```
+
+---
+
+## 🎬 类型 4：美剧情景英语模板（Scene Block 连贯学习）
+
+适用于：美剧/电影/访谈类对话内容。目标是“按场景学英语”，避免碎片化单句。
+
+### 设计原则（必须遵守）
+
+1. **Scene Dialogue Block（最高优先级）**
+   - 先保留情景对话块（每块建议 2-6 句，保留问答/冲突/回应）
+   - 每块保持英语和中文对应，强调连贯性而非句子数量
+2. **Scene Context（主）**
+   - 简要说明该段语境（角色意图、语气、关系）
+3. **Scene Key Expression（主）**
+   - 提取这一段里最有迁移价值的表达
+4. **Common Pattern / Functional Sentence（辅）**
+   - 归纳常用句型与功能句（拒绝、让步、澄清、反问等）
+
+### 📋 Prompt 模板：
+
+```text
+You are an expert ESL dialogue coach and screenplay language analyst.
+Convert the transcript into a scene-based English learning dataset.
+Return strictly valid JSON only.
+
+Learning goals:
+1) Scene Dialogue Block FIRST (coherent 2-6 line mini-dialogues)
+2) Scene Context
+3) Scene Key Expression
+4) Common Sentence Pattern / Functional Sentence
+
+Output requirements:
+- Preserve dialogue continuity (question-answer-reaction) within each scene block.
+- Do NOT split a coherent exchange into many isolated one-liners.
+- For each scene block, keep EN/CN aligned and natural.
+- Prioritize high-value reusable spoken expressions.
+
+Use this JSON structure:
+{
+  "modules": [
+    {
+      "module": "scene title",
+      "type": "Scene Dialogue Block | Scene Context | Scene Key Expression | Common Sentence Pattern | Functional Sentence",
+      "chinese_meaning": "brief Chinese learning focus",
+      "examples": [
+        {"en": "English dialogue line or merged dialogue chunk", "cn": "Chinese translation"},
+        {"en": "English dialogue line or merged dialogue chunk", "cn": "Chinese translation"}
+      ]
+    }
+  ]
+}
 
 If no useful items are found, return {"modules": []}.
 ```

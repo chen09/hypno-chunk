@@ -404,8 +404,8 @@ export default function CustomAudioPlayer({
     <div id="audio-player-container" className="relative w-full">
       {/* Track info header */}
       <div className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-2.5 sm:px-4 sm:pt-3">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-[var(--text)] text-xs sm:text-sm truncate leading-tight">
+        <div className="min-w-0 max-w-full flex-1 overflow-hidden">
+          <h3 className="line-clamp-2-safe break-words text-xs font-semibold leading-tight text-[var(--text)] [overflow-wrap:anywhere] sm:text-sm">
             {currentTrack ? (currentTrack.displayName || currentTrack.filename) : 'Ready to Play'}
           </h3>
           {currentTrack?.category && (

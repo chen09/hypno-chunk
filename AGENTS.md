@@ -65,3 +65,33 @@ These files map generated output tracks to source input videos (YouTube URLs / I
 - Verification gate should remain strict:
   - Homepage responds (`https://hypnochunk.com`)
   - `/api/files` contains all expected new chunk filenames.
+
+## English Learning Content Policy (2026-04)
+
+For English-learning tracks (category `英语学习`), keep this pedagogical structure as default:
+
+- Primary layers:
+  - Vocabulary/Phrase layer (high-frequency reusable items)
+  - Short sentence / common expression layer (independently repeatable lines)
+- Secondary layer:
+  - Long sentence split layer (news-original lines split into clauses)
+- Deferred layer:
+  - Spaced-review/forgetting-curve scheduling is optional until algorithm support lands.
+
+Extraction/authoring constraints:
+
+- Add a dedicated `Common Sentence Pattern` type (e.g. `It depends on...`, `The point is that...`, `What I mean is...`).
+- Add a dedicated `News Functional Sentence` type for:
+  - Cause/effect
+  - Contrast
+  - Transition
+  - Data/statistics expression
+  - Passive-voice reporting
+- Long sentence items must be split by clause/meaning group:
+  - `EN clause A -> CN A -> EN clause B -> CN B`
+  - Avoid multi-sentence paragraph readouts followed by one large translation.
+
+Audio pacing default:
+
+- Vocabulary and sentence-pattern drills: `EN slow -> CN -> EN normal/fast`
+- Keep sentence-level alternation for bilingual memory reinforcement.

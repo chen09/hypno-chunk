@@ -223,17 +223,22 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
           </div>
         ) : effectiveMode === 'single' ? (
           !currentSubtitle ? (
-            <div className="text-[var(--text-muted)] text-sm invisible" />
-          ) : (
-            <div className="w-full border-y border-white/30 bg-black px-3 py-2.5 shadow-[0_10px_20px_rgba(0,0,0,0.55)]">
+            <div className="w-full border-y border-white/15 bg-black/85 px-3 py-2.5 shadow-[0_8px_16px_rgba(0,0,0,0.4)]">
               <p
-                className="mx-auto max-w-[500px] text-center text-[16px] font-extrabold leading-relaxed tracking-[0.01em] sm:text-[17px]"
+                className="mx-auto max-w-[500px] text-center text-[16px] font-semibold leading-relaxed sm:text-[17px] opacity-0 select-none"
+                aria-hidden="true"
+              >
+                subtitle placeholder
+              </p>
+            </div>
+          ) : (
+            <div className="w-full max-w-full overflow-hidden border-y border-white/30 bg-black px-3 py-2.5 shadow-[0_10px_20px_rgba(0,0,0,0.55)]">
+              <p
+                className="mx-auto max-w-[500px] text-center text-[16px] font-extrabold leading-relaxed tracking-[0.01em] break-words [overflow-wrap:anywhere] sm:text-[17px]"
                 style={{
                   color: '#ffffff',
                   opacity: 1,
                   textShadow: '0 1px 2px rgba(0,0,0,1), 0 0 1px rgba(255,255,255,0.18)',
-                  overflowWrap: 'anywhere',
-                  wordBreak: 'break-word',
                 }}
               >
                 {currentSubtitle.text}
@@ -243,7 +248,7 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
         ) : subtitles.length === 0 ? (
           <div className="text-[var(--text-muted)] text-sm invisible" />
         ) : (
-          <div className="h-[120px] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-left">
+          <div className="h-[120px] max-w-full overflow-x-hidden overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-left">
             <div className="space-y-1.5">
               {subtitles.map((sub, idx) => {
                 const isActive = idx === currentSubtitleIndex;
@@ -253,7 +258,7 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
                     ref={(el) => {
                       lineRefs.current[idx] = el;
                     }}
-                    className={`rounded-lg px-2 py-1.5 text-sm leading-relaxed transition ${
+                    className={`min-w-0 max-w-full overflow-hidden rounded-lg px-2 py-1.5 text-sm leading-relaxed break-words [overflow-wrap:anywhere] transition ${
                       isActive
                         ? 'bg-black text-white shadow-md shadow-black/30'
                         : 'text-[var(--text-muted)] opacity-80'

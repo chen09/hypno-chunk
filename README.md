@@ -38,18 +38,52 @@ This project is organized as a monorepo with the following components:
   
 - **`pipeline/`**: Python Tools (Data Processing)
   - Scripts for downloading videos, extracting audio, and generating learning materials.
-  - Supports two JSON formats:
+  - Supports three practical JSON authoring profiles:
     - **Type 1 (Semantic Modules)**: For learning collocations, phrasal verbs, idioms (includes `module`, `type`, `chinese_meaning`, `examples`)
     - **Type 2 (Common Expressions)**: For learning common English sentences (only `examples` with English and Chinese translation)
+    - **Type 3 (English News Learning Blend)**: Recommended for news-based lessons; combines:
+      - high-frequency vocabulary/phrases
+      - short reusable sentences
+      - common sentence patterns
+      - news functional sentences (cause/effect, contrast, transition, data, passive voice)
+      - long sentence split drills (clause-level bilingual alternation)
   - **Playlist automation workflow** (per-video processing steps):
     1. Run `pipeline/step1_prepare.py <YOUTUBE_URL>` to download MP3, run Whisper transcription with the largest local model, and split the resulting SRT into `<VIDEO_ID>_part*.srt`.
     2. Send each split SRT chunk to the Type 2 prompt (below) to regenerate `data/1_extracted_json/<VIDEO_ID>_part*.json` with English–Chinese pairs; this is handled by the assistant so you don't need to manually forward the prompt.
     3. Run `pipeline/step3_generate.py <VIDEO_ID>` to merge the JSON parts, synthesize new MP3/SRT outputs, and export module JSON for debugging.
     4. Upload `data/2_audio_output/<VIDEO_ID>_merged_final.*` and refresh the `track_names.json` / `data/0_raw_videos/playlist_progress.md` entries for the playlist.
 
+### Novel Autopilot (One Command)
+
+For long-form novel style sources, run fully autonomous ingest/publish with checkpoint resume:
+
+```bash
+python pipeline/run_novel_autopilot.py \
+  --url "https://www.youtube.com/watch?v=3eRcox-QkKM" \
+  --category "小说" \
+  --display-name "待定标题"
+```
+
+- Checkpoint file: `pipeline/checkpoints/<VIDEO_ID>.json`
+- Default chunk policy: split to `<= 90` minutes per part as `<VIDEO_ID>_partXX_merged_final.mp3`
+- Resume: rerun the same command; completed stages are skipped automatically
+- Force rerun all stages: add `--force`
+
 **Type 2 Prompt (Common Expressions)**
 
 > "You are an expert linguist and English teacher. Extract every useful English expression from the provided SRT chunk, deduplicating repeated lines and grouping related dialogue pairs into the same `examples` array. For this video set only `examples` arrays are required; omit `module`, `type`, and `chinese_meaning`. Provide each English sentence with its Chinese translation (treat romanized Chinese as the `cn` value) and return strictly valid JSON with the form `{ "modules": [{ "examples": [ ... ] }] }`. If nothing useful is found in the chunk, return `{ "modules": [] }`."
+
+### English News Learning Rule of Thumb
+
+For news-based English content under category `英语学习`, follow this default priority:
+
+1. Vocabulary/Phrase layer (primary)
+2. Short sentence and common expression layer (primary)
+3. Long sentence split layer (secondary, clause-by-clause bilingual)
+4. Spaced review layer (optional, pending forgetting-curve algorithm support)
+
+Avoid paragraph-level long readouts with delayed whole-paragraph translation.
+Prefer sentence/clause-level alternation for better retention.
 
   
 - **`data/`**: Shared Data Directory
@@ -111,8 +145,10 @@ The server runs Ubuntu 24.04 with Docker and Nginx.
 ## 📖 Documentation
 
 - **AGENTS.md**: Single source of truth for security/ops guardrails and agent handoff
+- **NOVEL_AUTOPILOT_HANDOFF.md**: Copy-paste handoff prompt for fully automated novel audio ingestion
 - **DEPLOYMENT.md**: Detailed deployment guide
 - **PROMPT_GUIDE.md**: LLM prompt templates for JSON extraction
+- **skills/english-news-learning/SKILL.md**: Reusable skill for English news lesson design and extraction standards
 - **fail2ban/README.md**: Fail2Ban rules, install and operations
 - **fail2ban/SUDO_CONFIG.md**: Passwordless sudo setup (standalone topic)
 - **web/README.md**: Web app development notes

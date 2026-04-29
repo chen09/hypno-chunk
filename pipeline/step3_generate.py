@@ -26,6 +26,14 @@ NEWS_TEMPLATE_PRIORITY = {
     "long sentence split": 50,
 }
 
+SCENE_TEMPLATE_PRIORITY = {
+    "scene dialogue block": 0,
+    "scene context": 10,
+    "scene key expression": 20,
+    "common sentence pattern": 30,
+    "functional sentence": 40,
+}
+
 def _normalize_text(value: str) -> str:
     return (value or "").strip().lower()
 
@@ -87,6 +95,64 @@ def reorder_modules_for_news_template(json_path: str) -> str:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
     logger.info(f"Applied news template module ordering to {path.name}")
+    return json_path
+
+def reorder_modules_for_scene_template(json_path: str) -> str:
+    """
+    Ensure dialogue/scene-learning modules follow the expected teaching flow:
+    Scene Block -> Scene Context -> Key Expression -> Pattern -> Functional
+    """
+    path = Path(json_path)
+    if not path.exists():
+        return json_path
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.warning(f"Skip scene template reorder: failed to read JSON ({e})")
+        return json_path
+
+    modules = data.get("modules", [])
+    if not isinstance(modules, list) or not modules:
+        return json_path
+
+    normalized_types = [_normalize_text(str(m.get("type", ""))) for m in modules if isinstance(m, dict)]
+    is_scene_template = any(
+        ("scene dialogue block" in t)
+        or ("scene context" in t)
+        or ("scene key expression" in t)
+        for t in normalized_types
+    )
+    if not is_scene_template:
+        return json_path
+
+    def module_priority(module: dict, idx: int) -> tuple[int, int]:
+        module_type = _normalize_text(str(module.get("type", "")))
+        module_name = _normalize_text(str(module.get("module", "")))
+        combined = f"{module_type} {module_name}"
+
+        for key, priority in SCENE_TEMPLATE_PRIORITY.items():
+            if key in combined:
+                return (priority, idx)
+        return (100, idx)
+
+    sorted_modules = [
+        module
+        for _, module in sorted(
+            ((module_priority(m, i), m) for i, m in enumerate(modules) if isinstance(m, dict)),
+            key=lambda x: x[0],
+        )
+    ]
+
+    if sorted_modules == modules:
+        return json_path
+
+    data["modules"] = sorted_modules
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+    logger.info(f"Applied scene template module ordering to {path.name}")
     return json_path
 
 def merge_json_parts(input_arg: str, format_type: str = None) -> str:
@@ -229,6 +295,7 @@ async def process_generation(input_arg: str, rate_cn: str = None, rate_en_slow: 
 
     # 1.5 Apply deterministic teaching order for news template modules
     processed_json_path = reorder_modules_for_news_template(processed_json_path)
+    processed_json_path = reorder_modules_for_scene_template(processed_json_path)
 
     # 2. Generate Audio
     logger.info(f"=== Step 3.2: Generating Audio from {processed_json_path} ===")

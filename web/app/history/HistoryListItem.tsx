@@ -57,8 +57,10 @@ export default function HistoryListItem({
       }}
       className="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-card)] p-3 shadow-sm outline-none ring-blue-500 focus-visible:ring-2 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150"
     >
-      <div className="min-w-0 flex-1 text-left">
-        <p className="truncate text-sm font-medium text-[var(--text)]">{displayTitle}</p>
+      <div className="min-w-0 max-w-full flex-1 overflow-hidden text-left">
+        <p className="line-clamp-2-safe break-words text-sm font-medium leading-snug text-[var(--text)] [overflow-wrap:anywhere]">
+          {displayTitle}
+        </p>
         <p className="mt-0.5 text-xs text-[var(--text-muted)]">
           {formatRelativeTime(item.updatedAt)}
           {item.category && (

@@ -232,6 +232,57 @@ class AudioGenerator:
         
         return AudioSegment.silent(duration=500)
 
+    async def _tts_to_pydub_with_words(
+        self, text: str, voice: str = None, rate: str = "+0%", retries: int = 3
+    ) -> tuple:
+        """
+        Like _tts_to_pydub_segment but also captures WordBoundary events from the TTS stream.
+
+        Returns (AudioSegment, list[dict]) where each dict has:
+          {"text": str, "start_offset_ms": float, "end_offset_ms": float}
+        The offsets are relative to the start of this TTS call (0-based milliseconds).
+        """
+        if not voice:
+            voice = self.voice
+
+        for attempt in range(retries + 1):
+            try:
+                communicate = edge_tts.Communicate(text, voice, rate=rate)
+                mp3_data = BytesIO()
+                word_boundaries: list = []
+
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        mp3_data.write(chunk["data"])
+                    elif chunk["type"] == "WordBoundary":
+                        # edge-tts offset/duration are in 100-nanosecond ticks
+                        start_ms = chunk["offset"] / 10_000
+                        end_ms = (chunk["offset"] + chunk["duration"]) / 10_000
+                        word_boundaries.append({
+                            "text": chunk.get("text", ""),
+                            "start_offset_ms": start_ms,
+                            "end_offset_ms": end_ms,
+                        })
+
+                mp3_data.seek(0)
+                segment = AudioSegment.from_file(mp3_data, format="mp3")
+                return segment, word_boundaries
+
+            except Exception as e:
+                if "429" in str(e) or "Too Many Requests" in str(e) or "WSServerHandshakeError" in str(e):
+                    if attempt < retries:
+                        wait_time = (2 ** attempt) + random.uniform(0, 1)
+                        logger.warning(f"Rate limit hit for '{text[:20]}...'. Retrying in {wait_time:.2f}s...")
+                        await asyncio.sleep(wait_time)
+                    else:
+                        logger.error(f"Failed after {retries} retries: {text}. Error: {e}")
+                        return AudioSegment.silent(duration=500), []
+                else:
+                    logger.error(f"Failed to convert text to audio: {text}. Error: {e}")
+                    return AudioSegment.silent(duration=500), []
+
+        return AudioSegment.silent(duration=500), []
+
     def _timedelta_to_srt_timestamp(self, seconds: float) -> str:
         """
         Convert seconds (float) to SRT timestamp format (HH:MM:SS,mmm).
@@ -279,6 +330,7 @@ class AudioGenerator:
         
         combined_audio = AudioSegment.empty()
         srt_entries = []
+        words_entries: list = []
         current_time_ms = 0
         
         # We need to collect all module audios to combine them at the end
@@ -360,6 +412,7 @@ class AudioGenerator:
 
                 # Temporary list to store relative SRT entries for this module
                 module_srt_entries = []
+                module_word_entries: list = []
                 module_offset_ms = 0
 
                 async def add_module_segment(text, v, r, is_p=False, p_dur=0):
@@ -368,7 +421,17 @@ class AudioGenerator:
                     if is_p:
                         seg = AudioSegment.silent(duration=p_dur)
                     else:
-                        seg = await self._tts_to_pydub_segment(text, v, rate=r)
+                        is_english = bool(v) and v != self.chinese_voice
+                        if is_english:
+                            seg, word_bounds = await self._tts_to_pydub_with_words(text, v, rate=r)
+                            for wb in word_bounds:
+                                module_word_entries.append({
+                                    "start_offset": module_offset_ms + wb["start_offset_ms"],
+                                    "end_offset": module_offset_ms + wb["end_offset_ms"],
+                                    "text": wb["text"],
+                                })
+                        else:
+                            seg = await self._tts_to_pydub_segment(text, v, rate=r)
                         if text: # Only add subtitle if there is text
                             module_srt_entries.append({
                                 "start_offset": module_offset_ms,
@@ -480,11 +543,12 @@ class AudioGenerator:
                 logger.info(f"✓ Module {module_idx}/{len(modules)} completed ({module_duration_sec:.1f}s)")
                 
                 # Save module SRT entries for later global adjustment
-                # We can also attach them to the module object if we wanted to save individual SRTs
                 module['srt_offsets'] = module_srt_entries
+                module['word_offsets'] = module_word_entries
 
             else:
                 # SKIP PROCESSING, TRY TO LOAD EXISTING
+                module_word_entries = []
                 if module_audio_path.exists():
                     # logger.info(f"Skipping {module_idx}, loading existing audio.")
                     try:
@@ -518,6 +582,13 @@ class AudioGenerator:
                         "text": entry["text"]
                     })
 
+                for entry in module_word_entries:
+                    words_entries.append({
+                        "start": start_time_base + entry["start_offset"],
+                        "end": start_time_base + entry["end_offset"],
+                        "text": entry["text"],
+                    })
+
                 combined_audio += module_audio
 
         # Save Final Combined File
@@ -540,6 +611,12 @@ class AudioGenerator:
             with open(srt_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(srt_file_content))
             logger.info(f"SRT export successful: {srt_path}")
+
+            if words_entries:
+                words_path = output_path.with_suffix(".words.json")
+                with open(words_path, "w", encoding="utf-8") as f:
+                    json.dump(words_entries, f, ensure_ascii=False)
+                logger.info(f"Words JSON export successful: {words_path} ({len(words_entries)} entries)")
 
             logger.info("Audio export successful.")
             return str(output_path.resolve())

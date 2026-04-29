@@ -51,6 +51,8 @@ export async function GET(
       contentType = 'audio/mpeg';
     } else if (ext === '.srt') {
       contentType = 'text/plain; charset=utf-8';
+    } else if (ext === '.json') {
+      contentType = 'application/json; charset=utf-8';
     }
 
     // Handle Range requests for audio streaming

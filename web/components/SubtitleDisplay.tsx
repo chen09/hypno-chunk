@@ -9,6 +9,12 @@ interface SubtitleEntry {
   text: string;
 }
 
+interface WordEntry {
+  text: string;
+  start: number; // milliseconds from track start
+  end: number;   // milliseconds from track start
+}
+
 interface SubtitleDisplayProps {
   srtPath: string | null;
   currentTime: number; // in seconds
@@ -55,10 +61,37 @@ function parseSRT(content: string): SubtitleEntry[] {
   return entries;
 }
 
+/**
+ * Splits `text` into whitespace-delimited tokens and wraps the token at
+ * `activeWordIdx` (index into `cueWords`) with a subtle highlight ring.
+ * Falls back to plain text when no word data is available.
+ */
+function renderWithWordBox(text: string, cueWords: WordEntry[], activeWordIdx: number) {
+  if (cueWords.length === 0) return text;
+  const tokens = text.match(/\S+/g) ?? [text];
+  return (
+    <>
+      {tokens.map((token, i) => (
+        <span key={i}>
+          {i === activeWordIdx ? (
+            <span className="rounded ring-1 ring-white/70 px-0.5">
+              {token}
+            </span>
+          ) : (
+            token
+          )}
+          {i < tokens.length - 1 ? ' ' : ''}
+        </span>
+      ))}
+    </>
+  );
+}
+
 export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }: SubtitleDisplayProps) {
   const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
   const [currentSubtitleIndex, setCurrentSubtitleIndex] = useState<number>(-1);
   const [lastActiveSubtitleIndex, setLastActiveSubtitleIndex] = useState<number>(-1);
+  const [wordEntries, setWordEntries] = useState<WordEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<SubtitleMode>(() => {
@@ -128,6 +161,18 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
       });
   }, [srtPath]);
 
+  // Load word-boundary sidecar (.words.json) alongside the SRT.
+  // Failures and 404s are silently ignored so older tracks keep working.
+  useEffect(() => {
+    setWordEntries([]);
+    if (!srtPath) return;
+    const wordsPath = srtPath.replace(/\.srt$/, '.words.json');
+    fetch(wordsPath)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setWordEntries(Array.isArray(data) ? (data as WordEntry[]) : []))
+      .catch(() => {});
+  }, [srtPath]);
+
   // Find current subtitle index based on currentTime
   useEffect(() => {
     if (subtitles.length === 0) {
@@ -184,6 +229,20 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
     if (lastActiveSubtitleIndex >= 0) return lastActiveSubtitleIndex;
     return subtitles.length > 0 ? 0 : -1;
   }, [currentSubtitleIndex, lastActiveSubtitleIndex, subtitles.length]);
+
+  // cueWords: word entries whose timing falls within the current active cue.
+  // activeWordIdx: index (within cueWords) of the word currently being spoken.
+  const { cueWords, activeWordIdx } = useMemo(() => {
+    if (!currentSubtitle || wordEntries.length === 0) {
+      return { cueWords: [] as WordEntry[], activeWordIdx: -1 };
+    }
+    const cueStartMs = currentSubtitle.startTime * 1000;
+    const cueEndMs = currentSubtitle.endTime * 1000;
+    const cueWords = wordEntries.filter((w) => w.start >= cueStartMs && w.start < cueEndMs);
+    const currentTimeMs = currentTime * 1000;
+    const activeWordIdx = cueWords.findIndex((w) => currentTimeMs >= w.start && currentTimeMs < w.end);
+    return { cueWords, activeWordIdx };
+  }, [currentSubtitle, wordEntries, currentTime]);
 
   useEffect(() => {
     if (effectiveMode !== 'multi' || subtitles.length === 0 || multiScrollAnchorIndex < 0) return;
@@ -274,7 +333,7 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
                   textShadow: '0 1px 2px rgba(0,0,0,1), 0 0 1px rgba(255,255,255,0.18)',
                 }}
               >
-                {currentSubtitle.text}
+                {renderWithWordBox(currentSubtitle.text, cueWords, activeWordIdx)}
               </p>
             </div>
           )
@@ -301,7 +360,9 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
                         : 'text-[var(--text-muted)] opacity-80'
                     }`}
                   >
-                    {sub.text}
+                    {isActive
+                      ? renderWithWordBox(sub.text, cueWords, activeWordIdx)
+                      : sub.text}
                   </div>
                 );
               })}

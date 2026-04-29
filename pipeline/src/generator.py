@@ -455,6 +455,26 @@ class AudioGenerator:
                             # Keep paragraph feel in audio while enabling sentence-level subtitle sync.
                             await add_module_segment("", "", "", is_p=True, p_dur=120)
 
+                async def add_news_sentence_pairs(en_text: str, cn_text: str):
+                    """
+                    News comprehension mode:
+                    Read one English sentence, then one Chinese sentence (faster),
+                    instead of reading a long English block first.
+                    """
+                    en_segments = split_text_for_sentence_subtitles(en_text, is_chinese=False)
+                    cn_segments = split_text_for_sentence_subtitles(cn_text, is_chinese=True) if cn_text else []
+                    news_cn_rate = "+20%"
+
+                    for seg_idx, en_seg in enumerate(en_segments):
+                        await add_module_segment(en_seg, self.voice, "+0%")
+                        await add_module_segment("", "", "", is_p=True, p_dur=260)
+
+                        if cn_segments:
+                            cn_seg = cn_segments[seg_idx] if seg_idx < len(cn_segments) else ""
+                            if cn_seg:
+                                await add_module_segment(cn_seg, self.chinese_voice, news_cn_rate)
+                                await add_module_segment("", "", "", is_p=True, p_dur=320)
+
                 # 1. Module Name (EN) - only if exists
                 if phrase:
                     await add_module_segment(phrase, self.voice, "+0%")
@@ -492,14 +512,9 @@ class AudioGenerator:
                         continue
 
                     if is_full_news_pass:
-                        # News full pass flow requested by product:
-                        # EN Normal -> CN Translation -> EN Slow Review
-                        await add_module_sentence_synced(en_text, self.voice, "+0%")
-                        await add_module_segment("", "", "", is_p=True, p_dur=500)
-                        if cn_text:
-                            await add_module_sentence_synced(cn_text, self.chinese_voice, self.rate_cn)
-                            await add_module_segment("", "", "", is_p=True, p_dur=500)
-                        await add_module_sentence_synced(en_text, self.voice, self.rate_en_slow)
+                        # News comprehension flow requested by user:
+                        # EN sentence -> CN sentence (faster), no long EN-only blocks.
+                        await add_news_sentence_pairs(en_text, cn_text)
                     elif is_scene_dialogue:
                         # Scene dialogue flow:
                         # EN normal (context) -> CN translation -> EN normal review

@@ -107,10 +107,28 @@ def _extract_verbatim_lines(source_path: Path, text_content: str) -> List[str]:
             lines.append(line)
         return lines
 
-    compact = re.sub(r"\s+", " ", text_content).strip()
-    if not compact:
-        return []
-    return [compact]
+    normalized = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1", text_content)
+    blocks = re.split(r"\n\s*\n", normalized)
+    lines: List[str] = []
+    noise_prefixes = (
+        "related stories",
+        "read more",
+        "key points",
+        "help on the way",
+        "iran responds",
+    )
+    for block in blocks:
+        line = re.sub(r"\s+", " ", block).strip()
+        if not line:
+            continue
+        lowered = line.lower()
+        if lowered.startswith(noise_prefixes):
+            continue
+        # Filter obvious navigation/metadata snippets but keep short meaningful sentences.
+        if len(line) < 28 and not re.search(r"[.!?。！？]$", line):
+            continue
+        lines.append(line)
+    return lines
 
 
 def _build_news_paragraphs(lines: List[str], target_chars: int, max_chars: int) -> List[str]:
@@ -163,6 +181,7 @@ async def process_text_file_to_json(
     output_json_path: str,
     profile: str = "common",
     news_paragraph_chars: int = 420,
+    news_source_text_file: str | None = None,
 ):
     """使用 LLM 处理文本文件，生成 JSON"""
     load_dotenv()
@@ -262,7 +281,18 @@ async def process_text_file_to_json(
             data["modules"] = []
 
         if profile == "news":
-            verbatim_lines = _extract_verbatim_lines(source_path, text_content)
+            verbatim_source_path = source_path
+            verbatim_source_text = text_content
+            if news_source_text_file:
+                source_file_path = Path(news_source_text_file)
+                if not source_file_path.exists():
+                    logger.error(f"News source text file not found: {news_source_text_file}")
+                    raise FileNotFoundError(news_source_text_file)
+                verbatim_source_path = source_file_path
+                verbatim_source_text = source_file_path.read_text(encoding="utf-8")
+                logger.info(f"Using external news source text for Full News Pass: {source_file_path}")
+
+            verbatim_lines = _extract_verbatim_lines(verbatim_source_path, verbatim_source_text)
             paragraph_max_chars = max(news_paragraph_chars + 180, news_paragraph_chars + 1)
             news_paragraphs = _build_news_paragraphs(
                 verbatim_lines,
@@ -309,6 +339,11 @@ async def main():
         default=420,
         help="Target paragraph size for verbatim Full News Pass (news profile only).",
     )
+    parser.add_argument(
+        "--news-source-text-file",
+        default=None,
+        help="Optional external article text file for Full News Pass (news profile only).",
+    )
     args = parser.parse_args()
 
     text_file = args.text_file
@@ -330,6 +365,7 @@ async def main():
         output_json,
         profile=args.profile,
         news_paragraph_chars=args.news_paragraph_chars,
+        news_source_text_file=args.news_source_text_file,
     )
 
 if __name__ == "__main__":

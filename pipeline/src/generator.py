@@ -247,7 +247,7 @@ class AudioGenerator:
 
         for attempt in range(retries + 1):
             try:
-                communicate = edge_tts.Communicate(text, voice, rate=rate)
+                communicate = edge_tts.Communicate(text, voice, rate=rate, boundary="WordBoundary")
                 mp3_data = BytesIO()
                 word_boundaries: list = []
 

@@ -170,7 +170,7 @@ def _build_full_news_module(paragraphs: List[str]) -> dict:
     return {
         "module": "Full News Pass • Verbatim Paragraph Flow",
         "type": "Full News Pass",
-        "chinese_meaning": "新闻原文整段朗读（EN normal -> CN -> EN slow）",
+        "chinese_meaning": "",
         # Keep EN verbatim and let step3 translator fill CN.
         "examples": [{"en": text} for text in paragraphs],
     }
@@ -370,4 +370,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

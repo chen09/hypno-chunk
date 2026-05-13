@@ -146,11 +146,84 @@ def split_text_for_sentence_subtitles(text: str, is_chinese: bool = False) -> li
     if is_chinese:
         parts = re.split(r"(?<=[。！？；])\s*", normalized)
     else:
+        protected = _protect_english_abbreviations(normalized)
         # Split on sentence boundaries while avoiding most abbreviation breaks.
-        parts = re.split(r"(?<=[.!?])\s+(?=(?:[\"'“”‘’(\[]?[A-Z]))", normalized)
+        parts = re.split(r"(?<=[.!?])\s+(?=(?:[\"'“”‘’(\[]?[A-Z]))", protected)
+        parts = [_restore_english_abbreviations(part) for part in parts]
 
     segments = [p.strip() for p in parts if p and p.strip()]
     return segments or [normalized]
+
+
+ABBREVIATION_DOT = "∯"
+COMMON_ENGLISH_ABBREVIATIONS = (
+    "U.S.",
+    "U.K.",
+    "U.N.",
+    "E.U.",
+    "Adm.",
+    "Capt.",
+    "Col.",
+    "Dr.",
+    "Gen.",
+    "Gov.",
+    "Jr.",
+    "Ltd.",
+    "Mr.",
+    "Mrs.",
+    "Ms.",
+    "No.",
+    "Prof.",
+    "Rep.",
+    "Rev.",
+    "Sen.",
+    "Sr.",
+    "St.",
+    "vs.",
+    "etc.",
+    "e.g.",
+    "i.e.",
+    "a.m.",
+    "p.m.",
+)
+
+
+def _protect_english_abbreviations(text: str) -> str:
+    protected = text
+
+    for abbreviation in COMMON_ENGLISH_ABBREVIATIONS:
+        pattern = re.compile(re.escape(abbreviation), re.IGNORECASE)
+        protected = pattern.sub(lambda match: match.group(0).replace(".", ABBREVIATION_DOT), protected)
+
+    protected = re.sub(
+        r"\b(?:[A-Z]\.){2,}",
+        lambda match: match.group(0).replace(".", ABBREVIATION_DOT),
+        protected,
+    )
+    return protected
+
+
+def _restore_english_abbreviations(text: str) -> str:
+    return text.replace(ABBREVIATION_DOT, ".")
+
+
+def _is_retryable_tts_error(error: Exception) -> bool:
+    message = str(error)
+    retryable_markers = (
+        "429",
+        "500",
+        "502",
+        "503",
+        "504",
+        "Too Many Requests",
+        "Invalid response status",
+        "Cannot connect to host",
+        "nodename nor servname provided",
+        "Server disconnected",
+        "TimeoutError",
+        "WSServerHandshakeError",
+    )
+    return any(marker in message for marker in retryable_markers)
 
 class AudioGenerator:
     """
@@ -192,7 +265,7 @@ class AudioGenerator:
         
         logger.info(f"Speeds set to -> CN: {self.rate_cn}, EN Slow: {self.rate_en_slow}, EN Fast: {self.rate_en_fast}")
 
-    async def _tts_to_pydub_segment(self, text: str, voice: str = None, rate: str = "+0%", retries: int = 3) -> AudioSegment:
+    async def _tts_to_pydub_segment(self, text: str, voice: str = None, rate: str = "+0%", retries: int = 5) -> AudioSegment:
         """
         Helper: Convert text to an AudioSegment using edge-tts.
         Includes exponential backoff retry logic for 429 errors.
@@ -217,10 +290,10 @@ class AudioGenerator:
                 return segment
             
             except Exception as e:
-                if "429" in str(e) or "Too Many Requests" in str(e) or "WSServerHandshakeError" in str(e):
+                if _is_retryable_tts_error(e):
                     if attempt < retries:
                         wait_time = (2 ** attempt) + random.uniform(0, 1)
-                        logger.warning(f"Rate limit hit for text '{text[:20]}...'. Retrying in {wait_time:.2f}s...")
+                        logger.warning(f"Retryable TTS error for text '{text[:20]}...'. Retrying in {wait_time:.2f}s... Error: {e}")
                         await asyncio.sleep(wait_time)
                     else:
                         logger.error(f"Failed to convert text to audio after {retries} retries: {text}. Error: {e}")
@@ -233,7 +306,7 @@ class AudioGenerator:
         return AudioSegment.silent(duration=500)
 
     async def _tts_to_pydub_with_words(
-        self, text: str, voice: str = None, rate: str = "+0%", retries: int = 3
+        self, text: str, voice: str = None, rate: str = "+0%", retries: int = 5
     ) -> tuple:
         """
         Like _tts_to_pydub_segment but also captures WordBoundary events from the TTS stream.
@@ -269,10 +342,10 @@ class AudioGenerator:
                 return segment, word_boundaries
 
             except Exception as e:
-                if "429" in str(e) or "Too Many Requests" in str(e) or "WSServerHandshakeError" in str(e):
+                if _is_retryable_tts_error(e):
                     if attempt < retries:
                         wait_time = (2 ** attempt) + random.uniform(0, 1)
-                        logger.warning(f"Rate limit hit for '{text[:20]}...'. Retrying in {wait_time:.2f}s...")
+                        logger.warning(f"Retryable TTS error for '{text[:20]}...'. Retrying in {wait_time:.2f}s... Error: {e}")
                         await asyncio.sleep(wait_time)
                     else:
                         logger.error(f"Failed after {retries} retries: {text}. Error: {e}")
@@ -457,31 +530,41 @@ class AudioGenerator:
 
                 async def add_news_sentence_pairs(en_text: str, cn_text: str):
                     """
-                    News comprehension mode:
-                    Read one English sentence, then one Chinese sentence (faster),
-                    instead of reading a long English block first.
+                    News comprehension mode.
+                    Prefer strict EN<->CN sentence pairing when segment counts match.
+                    If counts differ, fallback to stable alignment:
+                    play all EN segments first, then one CN block.
+                    This avoids cross-sentence subtitle drift caused by index-based mismatches.
                     """
                     en_segments = split_text_for_sentence_subtitles(en_text, is_chinese=False)
                     cn_segments = split_text_for_sentence_subtitles(cn_text, is_chinese=True) if cn_text else []
                     news_cn_rate = "+20%"
 
-                    for seg_idx, en_seg in enumerate(en_segments):
+                    if cn_segments and len(en_segments) == len(cn_segments):
+                        for en_seg, cn_seg in zip(en_segments, cn_segments):
+                            await add_module_segment(en_seg, self.voice, "+0%")
+                            await add_module_segment("", "", "", is_p=True, p_dur=260)
+                            await add_module_segment(cn_seg, self.chinese_voice, news_cn_rate)
+                            await add_module_segment("", "", "", is_p=True, p_dur=320)
+                        return
+
+                    for en_seg in en_segments:
                         await add_module_segment(en_seg, self.voice, "+0%")
                         await add_module_segment("", "", "", is_p=True, p_dur=260)
 
-                        if cn_segments:
-                            cn_seg = cn_segments[seg_idx] if seg_idx < len(cn_segments) else ""
-                            if cn_seg:
-                                await add_module_segment(cn_seg, self.chinese_voice, news_cn_rate)
-                                await add_module_segment("", "", "", is_p=True, p_dur=320)
+                    if cn_text:
+                        await add_module_sentence_synced(cn_text, self.chinese_voice, news_cn_rate)
+                        await add_module_segment("", "", "", is_p=True, p_dur=320)
 
                 # 1. Module Name (EN) - only if exists
-                if phrase:
+                should_read_module_heading = not is_full_news_pass
+
+                if phrase and should_read_module_heading:
                     await add_module_segment(phrase, self.voice, "+0%")
                     await add_module_segment("", "", "", is_p=True, p_dur=500) # Short pause
 
                 # 2. Chinese Meaning (CN) - only if exists
-                if meaning:
+                if meaning and should_read_module_heading:
                     await add_module_segment(meaning, self.chinese_voice, "+0%")
                     await add_module_segment("", "", "", is_p=True, p_dur=2000) # Long pause
 
@@ -543,7 +626,7 @@ class AudioGenerator:
                         logger.info(f"  Unit progress: {i+1}/{total_units} units processed")
                 
                 # 6. Module Name (EN) - only if exists (重复模块名)
-                if phrase:
+                if phrase and should_read_module_heading:
                     await add_module_segment(phrase, self.voice, "+0%")
                     await add_module_segment("", "", "", is_p=True, p_dur=4000)
 

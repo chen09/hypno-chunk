@@ -222,7 +222,7 @@ export default function CustomAudioPlayer({
 
   // Listen to audio time updates
   useEffect(() => {
-    if (!playerRef.current || !onTimeUpdate || !currentTrack) return;
+    if (!onTimeUpdate || !currentTrack) return;
 
     let audioElement: HTMLAudioElement | null = null;
     let timeoutId: NodeJS.Timeout | null = null;

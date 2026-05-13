@@ -1,19 +1,7 @@
 'use client';
 
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
-
-interface SubtitleEntry {
-  id: number;
-  startTime: number; // in seconds
-  endTime: number; // in seconds
-  text: string;
-}
-
-interface WordEntry {
-  text: string;
-  start: number; // milliseconds from track start
-  end: number;   // milliseconds from track start
-}
+import { parseSRT, type SubtitleEntry, type WordEntry } from '@/lib/subtitles';
 
 interface SubtitleDisplayProps {
   srtPath: string | null;
@@ -24,46 +12,9 @@ interface SubtitleDisplayProps {
 type SubtitleMode = 'single' | 'auto' | 'multi';
 type SubtitlePosition = 'high' | 'middle' | 'low';
 
-// Parse SRT file content
-function parseSRT(content: string): SubtitleEntry[] {
-  const entries: SubtitleEntry[] = [];
-  const blocks = content.trim().split(/\n\s*\n/);
-
-  for (const block of blocks) {
-    const lines = block.trim().split('\n');
-    if (lines.length < 3) continue;
-
-    const id = parseInt(lines[0], 10);
-    if (isNaN(id)) continue;
-
-    const timeMatch = lines[1].match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
-    if (!timeMatch) continue;
-
-    const startTime = 
-      parseInt(timeMatch[1], 10) * 3600 +
-      parseInt(timeMatch[2], 10) * 60 +
-      parseInt(timeMatch[3], 10) +
-      parseInt(timeMatch[4], 10) / 1000;
-
-    const endTime = 
-      parseInt(timeMatch[5], 10) * 3600 +
-      parseInt(timeMatch[6], 10) * 60 +
-      parseInt(timeMatch[7], 10) +
-      parseInt(timeMatch[8], 10) / 1000;
-
-    const text = lines.slice(2).join(' ').trim();
-
-    if (text) {
-      entries.push({ id, startTime, endTime, text });
-    }
-  }
-
-  return entries;
-}
-
 /**
  * Splits `text` into whitespace-delimited tokens and wraps the token at
- * `activeWordIdx` (index into `cueWords`) with a clearer outline box.
+ * `activeWordIdx` (index into `cueWords`) with a spoken-word marker.
  * Falls back to plain text when no word data is available.
  */
 function renderWithWordBox(text: string, cueWords: WordEntry[], activeWordIdx: number) {
@@ -74,7 +25,7 @@ function renderWithWordBox(text: string, cueWords: WordEntry[], activeWordIdx: n
       {tokens.map((token, i) => (
         <span key={i}>
           {i === activeWordIdx ? (
-            <span className="rounded px-0.5 ring-2 ring-[#ffd84d] ring-offset-0 shadow-[0_0_0_1px_rgba(255,216,77,0.25)]">
+            <span className="rounded-md bg-cyan-300/95 px-1 text-slate-950 shadow-[0_1px_0_rgba(8,47,73,0.35),0_0_0_1px_rgba(14,116,144,0.24)]">
               {token}
             </span>
           ) : (
@@ -164,7 +115,7 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
   // Load word-boundary sidecar (.words.json) alongside the SRT.
   // Failures and 404s are silently ignored so older tracks keep working.
   useEffect(() => {
-    setWordEntries([]);
+    startTransition(() => setWordEntries([]));
     if (!srtPath) return;
     const wordsPath = srtPath.replace(/\.srt$/, '.words.json');
     fetch(wordsPath)
@@ -356,7 +307,7 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
                     }}
                     className={`min-w-0 max-w-full overflow-hidden rounded-lg px-2 py-1.5 text-sm leading-relaxed break-words [overflow-wrap:anywhere] transition ${
                       isActive
-                        ? 'bg-black text-white shadow-md shadow-black/30'
+                        ? 'bg-cyan-50 text-slate-950 shadow-sm ring-1 ring-cyan-300/80 dark:bg-cyan-950/45 dark:text-cyan-50 dark:ring-cyan-700/70'
                         : 'text-[var(--text-muted)] opacity-80'
                     }`}
                   >
@@ -379,4 +330,3 @@ export default function SubtitleDisplay({ srtPath, currentTime, trackCategory }:
     </div>
   );
 }
-

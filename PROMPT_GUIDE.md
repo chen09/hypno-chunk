@@ -158,10 +158,8 @@ Output requirements:
 - For long items, split by clause/meaning group and pair EN/CN step by step.
 - Do NOT output multi-sentence paragraph blocks with one combined translation.
 - For the full news pass layer, split the article into semantic chunks and put it BEFORE all other layers.
-- Full news pass chunks should use `type: "Full News Pass"` and concise module labels like:
-  - `Full News • Pass 1 (EN Normal)`
-  - `Full News • Pass 2 (CN Translation)`
-  - `Full News • Pass 3 (EN Slow Review)`
+- Full news pass module labels are metadata only; they must not be written as `examples` and must never be read aloud.
+- Do not put stage directions such as `EN normal -> CN -> EN slow` into `examples` or `chinese_meaning`.
 
 Use this JSON structure:
 {
@@ -169,7 +167,7 @@ Use this JSON structure:
     {
       "module": "item title",
       "type": "Full News Pass | Vocabulary | Short Sentence | Common Sentence Pattern | News Functional Sentence | Long Sentence Split",
-      "chinese_meaning": "concise Chinese meaning or learning focus",
+      "chinese_meaning": "leave empty for Full News Pass; otherwise concise Chinese meaning or learning focus",
       "examples": [
         {"en": "English segment or sentence", "cn": "Chinese translation"},
         {"en": "English segment or sentence", "cn": "Chinese translation"}

@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import AudioPlayer from '@/components/AudioPlayer';
@@ -417,6 +418,7 @@ function HomeInner() {
   const renderTrackCard = (file: FileWithDisplayName, originalIndex: number) => {
     const isSelected = actualTrackIndex === originalIndex;
     const displayName = file.displayName || file.filename.replace('_merged_final.mp3', '');
+    const isEnglishTrack = resolveTabByCategory(file.category) === 'english';
 
     return (
       <div
@@ -457,13 +459,26 @@ function HomeInner() {
           >
             {displayName}
           </h3>
-          <p
-            className={`mt-0.5 truncate text-xs transition-colors ${
-              isSelected ? 'text-blue-500 dark:text-blue-400' : 'text-[var(--text-muted)]'
-            }`}
-          >
-            {(file.size / 1024 / 1024).toFixed(1)} MB • {new Date(file.date).toLocaleDateString()}
-          </p>
+          <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+            <p
+              className={`min-w-0 truncate text-xs transition-colors ${
+                isSelected ? 'text-blue-500 dark:text-blue-400' : 'text-[var(--text-muted)]'
+              }`}
+            >
+              {(file.size / 1024 / 1024).toFixed(1)} MB • {new Date(file.date).toLocaleDateString()}
+            </p>
+            {isEnglishTrack && (
+              <Link
+                href={`/learn/${encodeURIComponent(file.filename)}`}
+                onClick={(event) => event.stopPropagation()}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-cyan-300/70 bg-cyan-50 px-2 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-100 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-200 dark:hover:bg-cyan-950"
+                aria-label={`阅读 ${displayName}`}
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                <span>阅读</span>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     );

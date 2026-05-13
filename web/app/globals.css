@@ -51,6 +51,57 @@ html, body {
   color: var(--text);
 }
 
+.reader-detail-shell {
+  color-scheme: light;
+  --reader-bg: #f6fbfb;
+  --surface: #ffffff;
+  --surface-muted: #f6fbfb;
+  --surface-card: #ffffff;
+  --border: #d9e6e8;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --player-bg: rgba(255, 255, 255, 0.94);
+  --player-border: rgba(217, 230, 232, 0.9);
+  --brand: #0891b2;
+  --brand-muted: rgba(8, 145, 178, 0.1);
+  --brand-glow: rgba(8, 145, 178, 0.26);
+  color: #0f172a !important;
+  background: var(--reader-bg) !important;
+}
+
+.reader-detail-shell .reader-title {
+  color: #10202a !important;
+  opacity: 1 !important;
+}
+
+.reader-detail-shell .reader-kicker {
+  color: #0e7490 !important;
+  opacity: 1 !important;
+}
+
+.reader-detail-shell .reader-line-en {
+  color: #111827 !important;
+  opacity: 1 !important;
+}
+
+.reader-detail-shell .reader-line-zh {
+  color: #334155 !important;
+  opacity: 1 !important;
+}
+
+.reader-detail-shell .reader-line-other {
+  color: #475569 !important;
+  opacity: 1 !important;
+}
+
+.reader-detail-shell .reader-segment-muted .reader-line-en {
+  color: #1f2937 !important;
+}
+
+.reader-detail-shell .reader-segment-muted .reader-line-zh {
+  color: #475569 !important;
+}
+
 /* Safe area for iPhone X+ */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);

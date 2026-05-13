@@ -16,6 +16,7 @@ READY TO CONTINUE
 - Confirmed fact with evidence: 关键知识文档已识别：`README.md`, `AGENTS.md`, `DEPLOYMENT.md`, `PROMPT_GUIDE.md`, `NOVEL_AUTOPILOT_HANDOFF.md`, `pipeline/NOVEL_AUTOPILOT_RUNBOOK.md`, `skills/english-news-learning/SKILL.md`, `web/README.md`, `fail2ban/README.md`, `fail2ban/SUDO_CONFIG.md`, `ENGLISH_LEARNING_EXTERNAL_REFERENCES.md`。
 - Confirmed fact with evidence: 2026-05-04 已发布小说源 `kO6Z5JG1Ivw`（标题基名：`日进斗金，我在小吃店通异界（完结）`），自动切为 20 段并完成上传、部署、线上校验（`pipeline/checkpoints/kO6Z5JG1Ivw.json` 与运行终端日志）。
 - Confirmed fact with evidence: 新增发布条目已写入 `track_names.json` 和 `output_input_mapping.csv/.md`，文件名为 `kO6Z5JG1Ivw_part01..20_merged_final.mp3`（`data/2_audio_output/track_names.json`, `data/2_audio_output/output_input_mapping.csv`）。
+- Confirmed fact with evidence: 2026-05-14 英语学习详情页与 canonical 新闻音频修复已发布到生产；`JDlyj1G36qs_merged_final.mp3` 在 `/api/files` 可见，详情页 `/learn/JDlyj1G36qs_merged_final.mp3` 返回 200，音频支持 Range 206，容器健康且仅绑定 `127.0.0.1:3000`。
 - Assumption: 用户所说“所有知识点”主要指“可执行的项目知识与规则”，不包含历史里程碑和一次性修复记录全文搬运；历史类文档按参考资料处理。
 
 ## Knowledge Index
@@ -78,9 +79,11 @@ READY TO CONTINUE
 - 2026-05-14 完成英语学习详情页本地实现与验证：新增 `/learn/[filename]` 长文阅读页，顶部播放器可见，默认英文字幕跟随，支持双语切换；修复 `AudioPlayer` 的 `timeupdate` 绑定时序，真实点击播放后 `currentTime` 可增长，seek 到 25s/120s 时字幕分别滚动到对应段落。
 - 2026-05-14 修复新闻学习音频生成问题：`Full News Pass` 的阶段说明不再读出，英文缩写如 `U.S.` / `Adm.` 不再错误断句，Edge TTS 503/超时等错误增加重试；已重新生成并覆盖 `JDlyj1G36qs_merged_final.mp3/.srt/.words.json`，旧 canonical 三件套备份在 `data/2_audio_output/.backup-20260514-canonical-news-fix/`。
 - 2026-05-14 本地发布前验证通过：`npm run lint`、`npx tsc --noEmit`、`npm run build`、`python3 -m py_compile pipeline/src/generator.py pipeline/process_text_to_json.py`；Next.js Dev Tools 红色 `1 Issue` 由 Chrome 扩展注入根节点 class 触发，已通过根布局 `suppressHydrationWarning` 消除。
+- 2026-05-14 完成 git 与生产发版：提交并推送 `d37cd44 Add English reading detail playback`，GitHub Actions Docker Build and Push run `25815973865` 成功；上传 `JDlyj1G36qs_merged_final.mp3/.srt/.words.json` 到 `/var/www/hypnochunk/data/2_audio_output/`，执行 `ssh ubuntu@133.125.45.147 "cd ~/hypnochunk && ./deploy.sh"`，发布镜像 digest `sha256:8bd6b203f1435741ae57fc806d2c6bd392d3468b87518f63890322d3f66e6c28`。
+- 2026-05-14 生产验收通过：`https://hypnochunk.com` 返回 200，`/learn/JDlyj1G36qs_merged_final.mp3` 返回 200，`/api/files` 包含 `JDlyj1G36qs_merged_final.mp3` 且 displayName 为 `Middle East Crisis - Improve Your English Vocabulary with the News`；`/audio/JDlyj1G36qs_merged_final.mp3` 返回 200 且 Range 返回 `206 audio/mpeg 1024`；生产 SRT 首句为 `FRANKFURT, Germany (AP) — The U.S. Navy’s sea blockade against Iran appears to be working.`；`words.json` 含 1983 个词级时间点；容器状态 `healthy`，端口绑定 `127.0.0.1:3000`。
 
 ## Next Minimal Step
-执行一次 `handoff.md` 轻量校验：确认新增或变更知识文档时，是否同步更新本文件中的“Knowledge Index”与“Decisions”。
+下一次英语学习内容生产前，优先用详情页验证新文件是否同时具备 `.mp3`、`.srt`、`.words.json`，并确认字幕滚动跟随真实播放时间。
 
 ## Next 3 Steps
 1. 对照 `README.md` 与 `AGENTS.md`，核查是否新增关键规则未同步进本 handoff。
@@ -98,11 +101,7 @@ READY TO CONTINUE
 - 将历史文档（如 milestone/progress）压缩成一行“历史参考索引”；依赖：是否需要长期保留；验证：不影响当前执行链路。
 
 ## Blockers
-- Blocker: 当前执行任务缺少实际发布目标。
-  - Likely cause: 上游发送的是任务模板，未替换 `TASK_GOAL`、内容类型、输入 URL/选源偏好、展示名/分类。
-  - Impact: 不能安全地自动选择并发布任意 novel 或 English-learning 内容到生产。
-  - Confidence: High
-  - Possible workaround: 提供实际 content type 和 URL；如果无 URL，至少提供 content type、主题/频道偏好、display name/category、selection preference，然后按对应 runbook 执行。
+- None known after the 2026-05-14 English-learning detail-page release.
 
 ## Do Not Retry Without New Evidence
 - 不要把“全仓所有文档全文搬运到 handoff”作为默认策略：会造成 handoff 臃肿、难以续跑。只有在出现新执行约束/新故障模式/新验收门槛时才增量写入。

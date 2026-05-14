@@ -39,7 +39,14 @@ function renderWithSpokenWord(text: string, words: WordEntry[], activeWordIdx: n
       {tokens.map((token, index) => (
         <span key={`${token}-${index}`}>
           {index === activeWordIdx ? (
-            <span className="rounded-md bg-cyan-300/95 px-1 text-slate-950 shadow-[0_1px_0_rgba(8,47,73,0.35),0_0_0_1px_rgba(14,116,144,0.22)]">
+            <span
+              data-active-word="true"
+              className="rounded-sm px-1.5 py-0.5 font-extrabold text-slate-950"
+              style={{
+                backgroundColor: '#fde047',
+                boxShadow: 'inset 0 -0.2em 0 #f97316, 0 0 0 2px #c2410c',
+              }}
+            >
               {token}
             </span>
           ) : (

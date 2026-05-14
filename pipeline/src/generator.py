@@ -25,6 +25,9 @@ SCENE_DIALOGUE_KEYS = (
     "drama scene",
     "tv scene",
 )
+NEWS_READING_MAX_EN_CHARS = 98
+NEWS_READING_MAX_CN_CHARS = 52
+NEWS_READING_SEGMENT_PAUSE_MS = 180
 
 
 def build_safe_module_filename(module_idx: int, phrase: str, max_phrase_len: int = 96) -> str:
@@ -144,15 +147,36 @@ def split_text_for_sentence_subtitles(text: str, is_chinese: bool = False) -> li
         return []
 
     if is_chinese:
-        parts = re.split(r"(?<=[。！？；])\s*", normalized)
+        parts = _split_chinese_sentences(normalized)
     else:
-        protected = _protect_english_abbreviations(normalized)
-        # Split on sentence boundaries while avoiding most abbreviation breaks.
-        parts = re.split(r"(?<=[.!?])\s+(?=(?:[\"'“”‘’(\[]?[A-Z]))", protected)
-        parts = [_restore_english_abbreviations(part) for part in parts]
+        parts = _split_english_sentences(normalized)
 
     segments = [p.strip() for p in parts if p and p.strip()]
     return segments or [normalized]
+
+
+def split_news_reading_pairs(en_text: str, cn_text: str) -> list[dict]:
+    """
+    Split long-form news reading into mobile-sized bilingual display units.
+
+    Full News Pass audio still speaks English only. These pairs keep the
+    written Chinese explanation close to the current English cue, so phone
+    readers do not see a long English block with the translation below the fold.
+    """
+    en_sentences = split_text_for_sentence_subtitles(en_text, is_chinese=False)
+    cn_sentences = split_text_for_sentence_subtitles(cn_text, is_chinese=True) if cn_text else []
+    aligned_cn_sentences = align_translation_segments(en_sentences, cn_sentences)
+    pairs: list[dict] = []
+
+    for en_sentence, cn_sentence in zip(en_sentences, aligned_cn_sentences):
+        en_parts = _split_long_english_for_reading(en_sentence)
+        cn_parts = _split_long_chinese_for_reading(cn_sentence, min_segments=len(en_parts)) if cn_sentence else []
+        aligned_cn_parts = align_translation_segments(en_parts, cn_parts)
+
+        for en_part, cn_part in zip(en_parts, aligned_cn_parts):
+            pairs.append({"en": en_part, "cn": cn_part})
+
+    return pairs
 
 
 def align_translation_segments(en_segments: list[str], cn_segments: list[str]) -> list[str]:
@@ -214,6 +238,182 @@ COMMON_ENGLISH_ABBREVIATIONS = (
     "a.m.",
     "p.m.",
 )
+
+
+def _split_english_sentences(text: str) -> list[str]:
+    protected = _protect_english_abbreviations(text)
+    parts: list[str] = []
+    start = 0
+
+    # Include closing quotes in the boundary match, e.g. `sea.” The action...`.
+    for match in re.finditer(r"[.!?][\"'”’]?\s+(?=(?:[\"'“‘(\[]?[A-Z]))", protected):
+        end = match.end()
+        part = protected[start:end].strip()
+        if part:
+            parts.append(_restore_english_abbreviations(part))
+        start = end
+
+    tail = protected[start:].strip()
+    if tail:
+        parts.append(_restore_english_abbreviations(tail))
+
+    return parts or [text]
+
+
+def _split_chinese_sentences(text: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+
+    for match in re.finditer(r"[。！？；][\"'”’」』）)]?\s*", text):
+        end = match.end()
+        part = text[start:end].strip()
+        if part:
+            parts.append(part)
+        start = end
+
+    tail = text[start:].strip()
+    if tail:
+        parts.append(tail)
+
+    return parts or [text]
+
+
+def _split_long_english_for_reading(text: str, max_chars: int = NEWS_READING_MAX_EN_CHARS) -> list[str]:
+    sentences = _split_english_sentences(text)
+    segments: list[str] = []
+
+    for sentence in sentences:
+        if len(sentence) <= max_chars:
+            segments.append(sentence)
+            continue
+
+        clause_parts = _split_by_regex(sentence, r"(?<=[,;:])\s+|(?<=—)\s+")
+        clause_segments = _pack_segments(clause_parts, max_chars=max_chars, separator=" ")
+
+        for segment in clause_segments:
+            if len(segment) <= max_chars:
+                segments.append(segment)
+                continue
+
+            soft_parts = _split_by_regex(
+                segment,
+                r"\s+(?=(?:while|and|but|because|since|after|before|when|as|including|unless|entering|leaving)\b)",
+                flags=re.IGNORECASE,
+            )
+            soft_segments = _pack_segments(soft_parts, max_chars=max_chars, separator=" ")
+
+            for soft_segment in soft_segments:
+                if len(soft_segment) <= max_chars:
+                    segments.append(soft_segment)
+                else:
+                    segments.extend(_split_words_by_limit(soft_segment, max_chars=max_chars))
+
+    return [segment for segment in segments if segment]
+
+
+def _split_long_chinese_for_reading(
+    text: str,
+    max_chars: int = NEWS_READING_MAX_CN_CHARS,
+    min_segments: int = 1,
+) -> list[str]:
+    normalized = re.sub(r"\s+", " ", (text or "").strip())
+    if not normalized:
+        return []
+
+    sentence_parts = [part for part in _split_chinese_sentences(normalized) if part.strip()]
+    segments: list[str] = []
+
+    for sentence in sentence_parts:
+        sentence = sentence.strip()
+        if len(sentence) <= max_chars:
+            segments.append(sentence)
+            continue
+
+        clause_parts = _split_by_regex(sentence, r"(?<=[，、：；])\s*")
+        clause_segments = _pack_segments(clause_parts, max_chars=max_chars, separator="")
+        for segment in clause_segments:
+            if len(segment) <= max_chars:
+                segments.append(segment)
+            else:
+                segments.extend(_split_cjk_by_limit(segment, max_chars=max_chars))
+
+    if min_segments > 1 and 0 < len(segments) < min_segments and len(normalized) >= min_segments * 8:
+        segments = _split_cjk_by_target_count(normalized, min_segments)
+
+    return [segment for segment in segments if segment]
+
+
+def _split_by_regex(text: str, pattern: str, flags: int = 0) -> list[str]:
+    return [part.strip() for part in re.split(pattern, text) if part and part.strip()]
+
+
+def _pack_segments(parts: list[str], max_chars: int, separator: str) -> list[str]:
+    packed: list[str] = []
+    current = ""
+
+    for part in parts:
+        if not current:
+            current = part
+            continue
+
+        candidate = f"{current}{separator}{part}" if separator else f"{current}{part}"
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            packed.append(current)
+            current = part
+
+    if current:
+        packed.append(current)
+
+    return packed
+
+
+def _split_words_by_limit(text: str, max_chars: int) -> list[str]:
+    chunks: list[str] = []
+    current: list[str] = []
+
+    for word in text.split():
+        candidate = " ".join(current + [word])
+        if current and len(candidate) > max_chars:
+            chunks.append(" ".join(current))
+            current = [word]
+        else:
+            current.append(word)
+
+    if current:
+        chunks.append(" ".join(current))
+
+    return chunks or [text]
+
+
+def _split_cjk_by_limit(text: str, max_chars: int) -> list[str]:
+    return [text[i : i + max_chars].strip() for i in range(0, len(text), max_chars) if text[i : i + max_chars].strip()]
+
+
+def _split_cjk_by_target_count(text: str, target_count: int) -> list[str]:
+    chunks: list[str] = []
+    remaining = text.strip()
+
+    for index in range(target_count - 1):
+        if not remaining:
+            break
+        target_len = max(1, round(len(remaining) / (target_count - index)))
+        window = remaining[: min(len(remaining), target_len + 12)]
+        break_positions = [window.rfind(mark) for mark in ("。", "！", "？", "；", "，", "、", "：")]
+        split_at = max(break_positions)
+        if split_at < max(6, int(target_len * 0.45)):
+            split_at = min(target_len, len(remaining) - 1)
+
+        chunk = remaining[: split_at + 1].strip()
+        if chunk:
+            chunks.append(chunk)
+        remaining = remaining[split_at + 1 :].strip()
+
+    if remaining:
+        chunks.append(remaining)
+
+    return chunks
 
 
 def _protect_english_abbreviations(text: str) -> str:
@@ -567,11 +767,11 @@ class AudioGenerator:
                     the English subtitle timing, so reading pages can show bilingual
                     subtitles without changing the audio timeline.
                     """
-                    en_segments = split_text_for_sentence_subtitles(en_text, is_chinese=False)
-                    cn_segments = split_text_for_sentence_subtitles(cn_text, is_chinese=True) if cn_text else []
-                    aligned_cn_segments = align_translation_segments(en_segments, cn_segments)
+                    reading_pairs = split_news_reading_pairs(en_text, cn_text)
 
-                    for en_seg, cn_seg in zip(en_segments, aligned_cn_segments):
+                    for pair in reading_pairs:
+                        en_seg = pair["en"]
+                        cn_seg = pair["cn"]
                         subtitle_entry = await add_module_segment(en_seg, self.voice, "+0%")
                         if subtitle_entry:
                             module_bilingual_entries.append({
@@ -580,7 +780,7 @@ class AudioGenerator:
                                 "en": en_seg,
                                 "cn": cn_seg,
                             })
-                        await add_module_segment("", "", "", is_p=True, p_dur=260)
+                        await add_module_segment("", "", "", is_p=True, p_dur=NEWS_READING_SEGMENT_PAUSE_MS)
 
                 # 1. Module Name (EN) - only if exists
                 should_read_module_heading = not is_full_news_pass
@@ -621,8 +821,7 @@ class AudioGenerator:
                         continue
 
                     if is_full_news_pass:
-                        # News comprehension flow requested by user:
-                        # EN sentence -> CN sentence (faster), no long EN-only blocks.
+                        # Full article/news mode: speak English once, display bilingual reading cues.
                         await add_news_sentence_pairs(en_text, cn_text)
                     elif is_scene_dialogue:
                         # Scene dialogue flow:

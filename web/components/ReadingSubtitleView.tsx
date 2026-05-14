@@ -66,6 +66,29 @@ function segmentEntries(segment: BilingualSegment, bilingual: boolean): Subtitle
   return [segment.english, segment.chinese, segment.other].filter(Boolean) as SubtitleEntry[];
 }
 
+function mergeSidecarSegments(
+  subtitles: SubtitleEntry[],
+  pairs: BilingualSubtitlePair[],
+): BilingualSegment[] {
+  if (pairs.length === 0) return buildBilingualSegments(subtitles);
+
+  const sidecarSegments = buildBilingualSegmentsFromPairs(pairs);
+  const sidecarRanges = sidecarSegments.map((segment) => ({
+    startTime: segment.startTime,
+    endTime: segment.endTime,
+  }));
+  const sidecarCoveredSubtitles = subtitles.filter((entry) =>
+    sidecarRanges.some(
+      (range) => entry.startTime >= range.startTime - 0.05 && entry.endTime <= range.endTime + 0.05,
+    ),
+  );
+  const uncoveredSubtitles = subtitles.filter((entry) => !sidecarCoveredSubtitles.includes(entry));
+
+  return [...sidecarSegments, ...buildBilingualSegments(uncoveredSubtitles)].sort(
+    (a, b) => a.startTime - b.startTime,
+  );
+}
+
 export default function ReadingSubtitleView({
   srtPath,
   currentTime,
@@ -141,21 +164,23 @@ export default function ReadingSubtitleView({
   }, [srtPath]);
 
   const segments = useMemo(() => {
-    if (bilingualPairs.length > 0) {
-      return buildBilingualSegmentsFromPairs(bilingualPairs);
-    }
-    return buildBilingualSegments(subtitles);
+    return mergeSidecarSegments(subtitles, bilingualPairs);
   }, [bilingualPairs, subtitles]);
 
   const activeEntry = useMemo(() => {
-    if (bilingualPairs.length > 0) {
-      return (
-        segments.find((segment) => currentTime >= segment.startTime && currentTime < segment.endTime)
-          ?.english ?? null
-      );
-    }
-    return subtitles.find((sub) => currentTime >= sub.startTime && currentTime < sub.endTime) ?? null;
-  }, [bilingualPairs.length, currentTime, segments, subtitles]);
+    const activeSegment =
+      segments.find((segment) => currentTime >= segment.startTime && currentTime < segment.endTime) ??
+      null;
+    if (!activeSegment) return null;
+
+    return (
+      segmentEntries(activeSegment, true).find((entry) => isEntryActive(entry, currentTime)) ??
+      activeSegment.english ??
+      activeSegment.chinese ??
+      activeSegment.other ??
+      null
+    );
+  }, [currentTime, segments]);
 
   const activeSegmentIndex = useMemo(() => {
     if (!activeEntry) return -1;

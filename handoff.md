@@ -17,6 +17,8 @@ READY TO CONTINUE
 - Confirmed fact with evidence: 2026-05-04 已发布小说源 `kO6Z5JG1Ivw`（标题基名：`日进斗金，我在小吃店通异界（完结）`），自动切为 20 段并完成上传、部署、线上校验（`pipeline/checkpoints/kO6Z5JG1Ivw.json` 与运行终端日志）。
 - Confirmed fact with evidence: 新增发布条目已写入 `track_names.json` 和 `output_input_mapping.csv/.md`，文件名为 `kO6Z5JG1Ivw_part01..20_merged_final.mp3`（`data/2_audio_output/track_names.json`, `data/2_audio_output/output_input_mapping.csv`）。
 - Confirmed fact with evidence: 2026-05-14 英语学习详情页与 canonical 新闻音频修复已发布到生产；`JDlyj1G36qs_merged_final.mp3` 在 `/api/files` 可见，详情页 `/learn/JDlyj1G36qs_merged_final.mp3` 返回 200，音频支持 Range 206，容器健康且仅绑定 `127.0.0.1:3000`。
+- Confirmed fact with evidence: 2026-05-14 最新 news mobile segmentation 修复已发布到生产；`JDlyj1G36qs_merged_final.srt/.bilingual.json` 均为 45 段，英文单段最长 97 字符，中文单段最长 35 字符，SRT 不含中文；生产 Chrome 静音播放验证通过，字幕 active segment 和黄色当前词高亮出现，未发现 `Issue` badge。
+- Confirmed fact with evidence: 2026-05-14 三条问题英语学习发布项已从生产列表移出并归档到 `/var/www/hypnochunk/data/2_audio_output/.archive-20260514-problem-learning/`：`ZmGxBtpejG4_part01_merged_final.mp3`、`MCsCvYCU2nc_part01_merged_final.mp3`、`o1VxetMgFOQ_part01_merged_final.mp3/.srt/.words.json`；本地对应文件归档在 `data/2_audio_output/.archive-20260514-problem-learning/`。
 - Assumption: 用户所说“所有知识点”主要指“可执行的项目知识与规则”，不包含历史里程碑和一次性修复记录全文搬运；历史类文档按参考资料处理。
 
 ## Knowledge Index
@@ -83,9 +85,13 @@ READY TO CONTINUE
 - 2026-05-14 生产验收通过：`https://hypnochunk.com` 返回 200，`/learn/JDlyj1G36qs_merged_final.mp3` 返回 200，`/api/files` 包含 `JDlyj1G36qs_merged_final.mp3` 且 displayName 为 `Middle East Crisis - Improve Your English Vocabulary with the News`；`/audio/JDlyj1G36qs_merged_final.mp3` 返回 200 且 Range 返回 `206 audio/mpeg 1024`；生产 SRT 首句为 `FRANKFURT, Germany (AP) — The U.S. Navy’s sea blockade against Iran appears to be working.`；`words.json` 含 1983 个词级时间点；容器状态 `healthy`，端口绑定 `127.0.0.1:3000`。
 - 2026-05-14 纠正最新 news 详情页策略：长篇新闻 article 音频只读英文，中文不再作为 spoken subtitle；生成 `JDlyj1G36qs_merged_final.bilingual.json` 作为英文时间轴上的中文解释，详情页默认双语，英文主行下方显示较小中文解释并跟随英文 cue 滚动。重新生成 `JDlyj1G36qs_merged_final.mp3/.srt/.words.json/.bilingual.json`，其中音频时长约 185.501s，SRT 不含中文，双语 sidecar 21 条，words 469 条。
 - 2026-05-14 纠正版本已发布：提交并推送 `33c6e2c Make news reading bilingual on English timing`，GitHub Actions Docker Build and Push run `25837253841` 成功；上传四个 production artifacts，执行 `ssh ubuntu@133.125.45.147 "cd ~/hypnochunk && ./deploy.sh"`，发布镜像 digest `sha256:7a3093131522232a269fc493b3fc7212d0fc7ee9169e80070f21063077c97fef`。生产验收：homepage 200，详情页 200，audio Range `206 audio/mpeg 1024`，`/api/files` 显示 `JDlyj1G36qs_merged_final.mp3` size `742509`，SRT 无 CJK，`.bilingual.json` 首条中英对正确，容器 `healthy` 且端口 `127.0.0.1:3000`。
+- 2026-05-14 修复最新 news 手机阅读问题：`Full News Pass` 生成时按英文句号/引号、逗号/分号/冒号与从句边界切成 mobile-sized cue；长篇 news 仍只朗读英文一次，中文只作为英文时间轴上的解释显示。重新生成 `JDlyj1G36qs_merged_final.mp3/.srt/.words.json/.bilingual.json`，音频时长约 209.59s，SRT 45 条且无 CJK，双语 sidecar 45 条，words 469 条，最长英文 97 字符，最长中文 35 字符。
+- 2026-05-14 增强详情页当前词高亮：由浅蓝框改为显式黄色填充、橙色下划线和深橙外框，并加 `data-active-word="true"` 便于测试。生产 Chrome/CDP 验证：`https://hypnochunk.com/learn/JDlyj1G36qs_merged_final.mp3` 静音播放可推进到 `2.11s`，active subtitle segment 出现，当前词高亮出现，`Issue` badge 计数为 0；截图证据 `/private/tmp/hypnochunk_mobile_news_cdp_check.png`。
+- 2026-05-14 清理问题英语学习发布项：本地和生产均把 `ZmGxBtpejG4_part01_merged_final.mp3`、`MCsCvYCU2nc_part01_merged_final.mp3`、`o1VxetMgFOQ_part01_merged_final.mp3/.srt/.words.json` 移入隐藏归档目录；`track_names.json` 删除 3 条，`output_input_mapping.csv` 删除 3 条，`output_input_mapping.md` 无对应行。生产 `/api/files` 验证三者均不再出现。
+- 2026-05-14 完成代码提交、CI 与生产部署：提交并推送 `be20fa9 Tighten news reading subtitles`，GitHub Actions Docker Build and Push run `25864629260` 成功；上传更新后的 `JDlyj1G36qs` 四件套、`track_names.json`、`output_input_mapping.csv/.md`，执行 `ssh ubuntu@133.125.45.147 "cd ~/hypnochunk && ./deploy.sh"`，发布镜像 digest `sha256:baf21da71a6f402b655c245f8542f920d3f76cc38f462bb0affda126de4b656c`。生产验收：homepage 200，详情页 200，audio Range `206 audio/mpeg 1024`，`/api/files` 显示 `JDlyj1G36qs_merged_final.mp3` size `838893`，容器 `healthy` 且端口 `127.0.0.1:3000`。
 
 ## Next Minimal Step
-下一次英语学习内容生产前，优先用详情页验证新文件是否同时具备 `.mp3`、`.srt`、`.words.json`，并确认字幕滚动跟随真实播放时间。
+下一次英语学习内容生产前，优先区分内容类型：词汇/词组/惯用句继续用 `EN slow -> CN -> EN fast`；长篇 news/article 只朗读英文一次，并生成 mobile-sized bilingual sidecar，让字幕跟随英文时间轴。
 
 ## Next 3 Steps
 1. 对照 `README.md` 与 `AGENTS.md`，核查是否新增关键规则未同步进本 handoff。

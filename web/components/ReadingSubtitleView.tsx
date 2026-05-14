@@ -3,9 +3,11 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildBilingualSegments,
+  buildBilingualSegmentsFromPairs,
   detectSubtitleLanguage,
   parseSRT,
   segmentContainsEntry,
+  type BilingualSubtitlePair,
   type BilingualSegment,
   type SubtitleEntry,
   type SubtitleLanguage,
@@ -63,6 +65,7 @@ export default function ReadingSubtitleView({
   bilingual,
 }: ReadingSubtitleViewProps) {
   const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
+  const [bilingualPairs, setBilingualPairs] = useState<BilingualSubtitlePair[]>([]);
   const [wordEntries, setWordEntries] = useState<WordEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +76,7 @@ export default function ReadingSubtitleView({
     if (!srtPath) {
       startTransition(() => {
         setSubtitles([]);
+        setBilingualPairs([]);
         setError(null);
       });
       return;
@@ -106,6 +110,20 @@ export default function ReadingSubtitleView({
   }, [srtPath]);
 
   useEffect(() => {
+    startTransition(() => setBilingualPairs([]));
+    if (!srtPath) return;
+    const bilingualPath = srtPath.replace(/\.srt$/, '.bilingual.json');
+    fetch(bilingualPath)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        startTransition(() => {
+          setBilingualPairs(Array.isArray(data) ? (data as BilingualSubtitlePair[]) : []);
+        });
+      })
+      .catch(() => {});
+  }, [srtPath]);
+
+  useEffect(() => {
     startTransition(() => setWordEntries([]));
     if (!srtPath) return;
     const wordsPath = srtPath.replace(/\.srt$/, '.words.json');
@@ -115,11 +133,22 @@ export default function ReadingSubtitleView({
       .catch(() => {});
   }, [srtPath]);
 
-  const activeEntry = useMemo(() => {
-    return subtitles.find((sub) => currentTime >= sub.startTime && currentTime < sub.endTime) ?? null;
-  }, [currentTime, subtitles]);
+  const segments = useMemo(() => {
+    if (bilingualPairs.length > 0) {
+      return buildBilingualSegmentsFromPairs(bilingualPairs);
+    }
+    return buildBilingualSegments(subtitles);
+  }, [bilingualPairs, subtitles]);
 
-  const segments = useMemo(() => buildBilingualSegments(subtitles), [subtitles]);
+  const activeEntry = useMemo(() => {
+    if (bilingualPairs.length > 0) {
+      return (
+        segments.find((segment) => currentTime >= segment.startTime && currentTime < segment.endTime)
+          ?.english ?? null
+      );
+    }
+    return subtitles.find((sub) => currentTime >= sub.startTime && currentTime < sub.endTime) ?? null;
+  }, [bilingualPairs.length, currentTime, segments, subtitles]);
 
   const activeSegmentIndex = useMemo(() => {
     if (!activeEntry) return -1;
@@ -223,6 +252,11 @@ export default function ReadingSubtitleView({
                     </p>
                   );
                 })}
+                {bilingual && segment.chineseTranslation && (
+                  <p className="reader-line-zh break-words text-[15px] leading-[1.55] [overflow-wrap:anywhere] sm:text-[16px]">
+                    {segment.chineseTranslation}
+                  </p>
+                )}
               </div>
             </div>
           );

@@ -11,6 +11,14 @@ export interface WordEntry {
   end: number;
 }
 
+export interface BilingualSubtitlePair {
+  id: number;
+  startTime: number;
+  endTime: number;
+  en: string;
+  cn?: string;
+}
+
 export type SubtitleLanguage = 'en' | 'zh' | 'other';
 
 export interface BilingualSegment {
@@ -19,6 +27,7 @@ export interface BilingualSegment {
   endTime: number;
   english?: SubtitleEntry;
   chinese?: SubtitleEntry;
+  chineseTranslation?: string;
   other?: SubtitleEntry;
 }
 
@@ -116,6 +125,23 @@ export function buildBilingualSegments(entries: SubtitleEntry[]): BilingualSegme
   }
 
   return segments;
+}
+
+export function buildBilingualSegmentsFromPairs(pairs: BilingualSubtitlePair[]): BilingualSegment[] {
+  return pairs
+    .filter((pair) => pair.en && Number.isFinite(pair.startTime) && Number.isFinite(pair.endTime))
+    .map((pair) => ({
+      id: String(pair.id),
+      startTime: pair.startTime,
+      endTime: pair.endTime,
+      english: {
+        id: pair.id,
+        startTime: pair.startTime,
+        endTime: pair.endTime,
+        text: pair.en,
+      },
+      chineseTranslation: pair.cn?.trim() || undefined,
+    }));
 }
 
 export function segmentContainsEntry(segment: BilingualSegment, entry: SubtitleEntry): boolean {

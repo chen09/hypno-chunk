@@ -40,7 +40,7 @@ function LearnDetailInner() {
   const [currentTime, setCurrentTime] = useState(0);
   const [initialPosition, setInitialPosition] = useState(0);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
-  const [bilingual, setBilingual] = useState(false);
+  const [bilingual, setBilingual] = useState(true);
 
   useEffect(() => {
     if (!currentTrack) return;

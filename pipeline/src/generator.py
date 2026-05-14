@@ -155,6 +155,34 @@ def split_text_for_sentence_subtitles(text: str, is_chinese: bool = False) -> li
     return segments or [normalized]
 
 
+def align_translation_segments(en_segments: list[str], cn_segments: list[str]) -> list[str]:
+    """
+    Align written Chinese translations to spoken English subtitle segments.
+
+    The audio timeline follows English only for Full News Pass content. Chinese is
+    metadata for display, so mismatched segmentation should never introduce spoken
+    CN timing drift. If Chinese has extra sentences, attach the overflow to the
+    last English segment; if it has fewer, leave the remaining translations empty.
+    """
+    if not en_segments:
+        return []
+    if not cn_segments:
+        return [""] * len(en_segments)
+    if len(en_segments) == len(cn_segments):
+        return cn_segments
+
+    aligned = cn_segments[: len(en_segments)]
+    if len(cn_segments) > len(en_segments):
+        overflow_start = max(len(en_segments) - 1, 0)
+        aligned = cn_segments[:overflow_start]
+        aligned.append(" ".join(cn_segments[overflow_start:]).strip())
+
+    while len(aligned) < len(en_segments):
+        aligned.append("")
+
+    return aligned
+
+
 ABBREVIATION_DOT = "∯"
 COMMON_ENGLISH_ABBREVIATIONS = (
     "U.S.",
@@ -403,6 +431,7 @@ class AudioGenerator:
         
         combined_audio = AudioSegment.empty()
         srt_entries = []
+        bilingual_entries = []
         words_entries: list = []
         current_time_ms = 0
         
@@ -485,12 +514,14 @@ class AudioGenerator:
 
                 # Temporary list to store relative SRT entries for this module
                 module_srt_entries = []
+                module_bilingual_entries = []
                 module_word_entries: list = []
                 module_offset_ms = 0
 
                 async def add_module_segment(text, v, r, is_p=False, p_dur=0):
                     nonlocal current_module_audio, module_offset_ms
                     seg = None
+                    subtitle_entry = None
                     if is_p:
                         seg = AudioSegment.silent(duration=p_dur)
                     else:
@@ -506,15 +537,16 @@ class AudioGenerator:
                         else:
                             seg = await self._tts_to_pydub_segment(text, v, rate=r)
                         if text: # Only add subtitle if there is text
-                            module_srt_entries.append({
+                            subtitle_entry = {
                                 "start_offset": module_offset_ms,
                                 "end_offset": module_offset_ms + len(seg),
                                 "text": text
-                            })
+                            }
+                            module_srt_entries.append(subtitle_entry)
                     
                     current_module_audio += seg
                     module_offset_ms += len(seg)
-                    return seg
+                    return subtitle_entry
 
                 async def add_module_sentence_synced(text: str, voice_name: str, speed_rate: str):
                     is_cn_voice = voice_name == self.chinese_voice
@@ -530,31 +562,25 @@ class AudioGenerator:
 
                 async def add_news_sentence_pairs(en_text: str, cn_text: str):
                     """
-                    News comprehension mode.
-                    Prefer strict EN<->CN sentence pairing when segment counts match.
-                    If counts differ, fallback to stable alignment:
-                    play all EN segments first, then one CN block.
-                    This avoids cross-sentence subtitle drift caused by index-based mismatches.
+                    Full-news reading mode.
+                    Speak English only. Keep Chinese as display metadata aligned to
+                    the English subtitle timing, so reading pages can show bilingual
+                    subtitles without changing the audio timeline.
                     """
                     en_segments = split_text_for_sentence_subtitles(en_text, is_chinese=False)
                     cn_segments = split_text_for_sentence_subtitles(cn_text, is_chinese=True) if cn_text else []
-                    news_cn_rate = "+20%"
+                    aligned_cn_segments = align_translation_segments(en_segments, cn_segments)
 
-                    if cn_segments and len(en_segments) == len(cn_segments):
-                        for en_seg, cn_seg in zip(en_segments, cn_segments):
-                            await add_module_segment(en_seg, self.voice, "+0%")
-                            await add_module_segment("", "", "", is_p=True, p_dur=260)
-                            await add_module_segment(cn_seg, self.chinese_voice, news_cn_rate)
-                            await add_module_segment("", "", "", is_p=True, p_dur=320)
-                        return
-
-                    for en_seg in en_segments:
-                        await add_module_segment(en_seg, self.voice, "+0%")
+                    for en_seg, cn_seg in zip(en_segments, aligned_cn_segments):
+                        subtitle_entry = await add_module_segment(en_seg, self.voice, "+0%")
+                        if subtitle_entry:
+                            module_bilingual_entries.append({
+                                "start_offset": subtitle_entry["start_offset"],
+                                "end_offset": subtitle_entry["end_offset"],
+                                "en": en_seg,
+                                "cn": cn_seg,
+                            })
                         await add_module_segment("", "", "", is_p=True, p_dur=260)
-
-                    if cn_text:
-                        await add_module_sentence_synced(cn_text, self.chinese_voice, news_cn_rate)
-                        await add_module_segment("", "", "", is_p=True, p_dur=320)
 
                 # 1. Module Name (EN) - only if exists
                 should_read_module_heading = not is_full_news_pass
@@ -647,6 +673,7 @@ class AudioGenerator:
             else:
                 # SKIP PROCESSING, TRY TO LOAD EXISTING
                 module_word_entries = []
+                module_bilingual_entries = []
                 if module_audio_path.exists():
                     # logger.info(f"Skipping {module_idx}, loading existing audio.")
                     try:
@@ -687,6 +714,14 @@ class AudioGenerator:
                         "text": entry["text"],
                     })
 
+                for entry in module_bilingual_entries:
+                    bilingual_entries.append({
+                        "start": start_time_base + entry["start_offset"],
+                        "end": start_time_base + entry["end_offset"],
+                        "en": entry["en"],
+                        "cn": entry["cn"],
+                    })
+
                 combined_audio += module_audio
 
         # Save Final Combined File
@@ -715,6 +750,25 @@ class AudioGenerator:
                 with open(words_path, "w", encoding="utf-8") as f:
                     json.dump(words_entries, f, ensure_ascii=False)
                 logger.info(f"Words JSON export successful: {words_path} ({len(words_entries)} entries)")
+
+            if bilingual_entries:
+                bilingual_path = output_path.with_suffix(".bilingual.json")
+                bilingual_payload = [
+                    {
+                        "id": i,
+                        "startTime": entry["start"] / 1000.0,
+                        "endTime": entry["end"] / 1000.0,
+                        "en": entry["en"],
+                        "cn": entry["cn"],
+                    }
+                    for i, entry in enumerate(bilingual_entries, 1)
+                ]
+                with open(bilingual_path, "w", encoding="utf-8") as f:
+                    json.dump(bilingual_payload, f, ensure_ascii=False, indent=2)
+                logger.info(
+                    f"Bilingual subtitle JSON export successful: {bilingual_path} "
+                    f"({len(bilingual_payload)} entries)"
+                )
 
             logger.info("Audio export successful.")
             return str(output_path.resolve())
